@@ -1,0 +1,173 @@
+#pragma once
+
+#include <QWidget>
+#include <QPoint>
+#include <QPointF>
+#include "geometry/Point2D.h"
+#include "geometry/Line2D.h"
+#include "geometry/Arc2D.h"
+#include "import/GeometryConverter.h"
+#include <vector>
+#include <optional>
+
+namespace OwnCAD {
+namespace UI {
+
+/**
+ * @brief Viewport state manager
+ *
+ * Handles coordinate transformation between world space and screen space.
+ * World space: DXF coordinates (mm, inches, etc.)
+ * Screen space: Qt pixel coordinates
+ */
+class Viewport {
+public:
+    Viewport();
+
+    // Coordinate transformations
+    QPointF worldToScreen(const Geometry::Point2D& worldPoint) const;
+    Geometry::Point2D screenToWorld(const QPointF& screenPoint) const;
+
+    // Pan controls
+    void pan(double dx, double dy);
+    void setPan(double x, double y);
+    double panX() const { return panX_; }
+    double panY() const { return panY_; }
+
+    // Zoom controls
+    void zoom(double factor, const QPointF& center);
+    void setZoom(double level);
+    double zoomLevel() const { return zoomLevel_; }
+
+    // Viewport management
+    void reset();
+    void setViewportSize(int width, int height);
+
+private:
+    double panX_;       // Pan offset X (screen space)
+    double panY_;       // Pan offset Y (screen space)
+    double zoomLevel_;  // Zoom level (1.0 = 1 world unit = 1 pixel)
+    int viewportWidth_;
+    int viewportHeight_;
+};
+
+/**
+ * @brief Snap manager for precise point input
+ */
+class SnapManager {
+public:
+    enum class SnapMode {
+        None = 0,
+        Grid = 1,
+        Endpoint = 2,
+        Midpoint = 4,
+        Nearest = 8
+    };
+
+    SnapManager();
+
+    // Snap settings
+    void setSnapMode(SnapMode mode, bool enabled);
+    bool isSnapEnabled(SnapMode mode) const;
+    void setGridSpacing(double spacing) { gridSpacing_ = spacing; }
+    double gridSpacing() const { return gridSpacing_; }
+
+    // Snap calculation
+    std::optional<Geometry::Point2D> snap(
+        const Geometry::Point2D& point,
+        const std::vector<Import::GeometryEntityWithMetadata>& entities
+    ) const;
+
+private:
+    Geometry::Point2D snapToGrid(const Geometry::Point2D& point) const;
+    std::optional<Geometry::Point2D> snapToEndpoint(
+        const Geometry::Point2D& point,
+        const std::vector<Import::GeometryEntityWithMetadata>& entities
+    ) const;
+
+    int snapModes_;
+    double gridSpacing_;
+    double snapTolerance_;
+};
+
+/**
+ * @brief Main CAD canvas widget for geometry rendering and interaction
+ *
+ * Features:
+ * - Renders Line2D and Arc2D entities
+ * - Pan (middle mouse button drag)
+ * - Zoom (mouse wheel)
+ * - Grid rendering with adaptive spacing
+ * - Snap system (grid, endpoint, midpoint)
+ * - Selection feedback
+ *
+ * Design principles:
+ * - Viewport transformation separates world/screen coordinates
+ * - All rendering happens in paintEvent
+ * - Mouse events update viewport state and trigger repaint
+ * - No direct geometry modification (read-only view for now)
+ */
+class CADCanvas : public QWidget {
+    Q_OBJECT
+
+public:
+    explicit CADCanvas(QWidget* parent = nullptr);
+    ~CADCanvas();
+
+    // Entity management
+    void setEntities(const std::vector<Import::GeometryEntityWithMetadata>& entities);
+    void clear();
+
+    // Grid settings
+    void setGridVisible(bool visible);
+    bool isGridVisible() const { return gridVisible_; }
+    void setGridSpacing(double spacing);
+
+    // Snap settings
+    void setSnapEnabled(SnapManager::SnapMode mode, bool enabled);
+    bool isSnapEnabled(SnapManager::SnapMode mode) const;
+
+    // Viewport controls
+    void resetView();
+    void zoomExtents();
+    const Viewport& viewport() const { return viewport_; }
+
+signals:
+    void viewportChanged(double zoom, double panX, double panY);
+    void cursorPositionChanged(double x, double y);
+
+protected:
+    // Qt event handlers
+    void paintEvent(QPaintEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
+    void mouseMoveEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
+    void wheelEvent(QWheelEvent* event) override;
+    void resizeEvent(QResizeEvent* event) override;
+
+private:
+    // Rendering methods
+    void renderGrid(QPainter& painter);
+    void renderOrigin(QPainter& painter);
+    void renderEntities(QPainter& painter);
+    void renderEntity(QPainter& painter, const Import::GeometryEntityWithMetadata& entity);
+    void renderLine(QPainter& painter, const Geometry::Line2D& line);
+    void renderArc(QPainter& painter, const Geometry::Arc2D& arc);
+
+    // Data members
+    std::vector<Import::GeometryEntityWithMetadata> entities_;
+    Viewport viewport_;
+    SnapManager snapManager_;
+
+    // UI state
+    bool gridVisible_;
+    double gridSpacing_;
+
+    // Mouse interaction state
+    bool isPanning_;
+    QPoint lastMousePos_;
+    Geometry::Point2D lastWorldPos_;
+};
+
+} // namespace UI
+} // namespace OwnCAD

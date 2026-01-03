@@ -1,0 +1,324 @@
+# OwnCAD - Industrial 2D CAD Application
+# .gitignore for C++ Qt6 CMake project
+
+# ============================================================================
+# BUILD DIRECTORIES
+# ============================================================================
+
+# CMake build directories
+build/
+Build/
+builds/
+cmake-build-*/
+
+# Qt Creator build directories
+build-*/
+*-build-*/
+
+# Out-of-source builds
+out/
+bin/
+lib/
+
+# ============================================================================
+# CMAKE GENERATED FILES
+# ============================================================================
+
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+install_manifest.txt
+CTestTestfile.cmake
+compile_commands.json
+Makefile
+
+# ============================================================================
+# C++ COMPILED FILES
+# ============================================================================
+
+# Object files
+*.o
+*.obj
+*.lo
+*.slo
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.so.*
+*.dylib
+*.dll
+
+# Compiled Static libraries
+*.a
+*.lib
+*.lai
+*.la
+
+# Executables
+*.exe
+*.out
+*.app
+OwnCAD
+OwnCAD.exe
+
+# Test executables
+test_*
+!test_*.cpp
+!test_*.h
+!test_*.dxf
+
+# ============================================================================
+# QT SPECIFIC
+# ============================================================================
+
+# Qt Creator project files (user-specific)
+*.pro.user
+*.pro.user.*
+*.qbs.user
+*.qbs.user.*
+
+# Qt generated files
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+*.qm
+*.qmlc
+*.jsc
+
+# Qt Creator autosave
+*.autosave
+
+# Qt plugins
+plugins/
+
+# ============================================================================
+# COMPILER & DEBUGGER
+# ============================================================================
+
+# GDB history
+.gdb_history
+
+# Valgrind output
+vgcore.*
+*.memcheck
+
+# Profiling data
+*.gcno
+*.gcda
+*.gcov
+
+# Address sanitizer
+*.asan
+
+# ============================================================================
+# VISUAL STUDIO / MSVC
+# ============================================================================
+
+# Visual Studio
+.vs/
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.sln
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Visual Studio cache/options directory
+.vs/
+.vscode/
+
+# ReSharper
+_ReSharper*/
+*.ReSharper
+
+# ============================================================================
+# MINGW / MSYS
+# ============================================================================
+
+# MinGW compiled files
+*.a
+*.dll.a
+
+# MSYS temporary files
+*.tmp
+
+# ============================================================================
+# OPERATING SYSTEM FILES
+# ============================================================================
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+*.stackdump
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Linux
+*~
+.directory
+.Trash-*
+
+# ============================================================================
+# IDEs & EDITORS
+# ============================================================================
+
+# Qt Creator
+*.cxxflags
+*.config
+*.creator
+*.creator.user*
+*.files
+*.includes
+*.autosave
+
+# CLion
+.idea/
+cmake-build-*/
+
+# Sublime Text
+*.sublime-workspace
+*.sublime-project
+
+# Vim
+*.swp
+*.swo
+*.swn
+.*.sw?
+
+# Emacs
+*~
+\#*\#
+.\#*
+
+# ============================================================================
+# DOCUMENTATION
+# ============================================================================
+
+# Doxygen output
+docs/html/
+docs/latex/
+docs/xml/
+Doxyfile.bak
+
+# ============================================================================
+# TEMPORARY & LOG FILES
+# ============================================================================
+
+# Log files
+*.log
+*.tlog
+*.ilk
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.cache
+
+# Core dumps
+core
+core.*
+*.core
+
+# ============================================================================
+# PACKAGE MANAGERS
+# ============================================================================
+
+# Conan
+conan.lock
+conanbuildinfo.*
+conaninfo.txt
+
+# vcpkg
+vcpkg_installed/
+
+# ============================================================================
+# TESTING
+# ============================================================================
+
+# Test results
+Testing/
+TestResults/
+*.testlog
+
+# Coverage reports
+coverage/
+*.gcov
+*.lcov
+
+# ============================================================================
+# PROJECT SPECIFIC - OWNCAD
+# ============================================================================
+
+# Keep test DXF files but ignore user-generated ones
+*.dxf
+!test_*.dxf
+!sample_*.dxf
+
+# Ignore large geometry test files
+large_test_*.dxf
+
+# User preferences (if we add them later)
+config/user_*.ini
+config/recent_*.json
+
+# Temporary validation reports
+validation_report_*.html
+validation_report_*.txt
+
+# Export cache
+export_cache/
+
+# ============================================================================
+# VERSION CONTROL
+# ============================================================================
+
+# Git
+*.orig
+*.rej
+*.patch
+
+# ============================================================================
+# KEEP THESE FILES
+# ============================================================================
+
+# Force include important directories
+!CMakeLists.txt
+!.gitignore
+!README.md
+!CLAUDE.md
+!LICENSE
+
+# Keep test files
+!tests/
+!test_sample.dxf
+!test_square_100x100.dxf
+!test_shapes.dxf
+
+# Keep source structure
+!include/
+!src/
+!tasks/
+
+# ============================================================================
+# END OF .gitignore
+# ============================================================================
