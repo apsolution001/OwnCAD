@@ -39,7 +39,19 @@ DXFParseResult DXFParser::parse(std::istream& input) {
     int code;
     std::string value;
 
-    while (readGroup(input, code, value, state.lineNumber)) {
+    while (true) {
+        // Check if we have a lookahead group to process first
+        if (state.lookahead.valid) {
+            code = state.lookahead.code;
+            value = state.lookahead.value;
+            state.lookahead.valid = false;
+        } else {
+            // Read next group from stream
+            if (!readGroup(input, code, value, state.lineNumber)) {
+                break;  // End of stream
+            }
+        }
+
         // Section markers
         if (code == 0) {
             if (value == "SECTION") {
@@ -62,6 +74,8 @@ DXFParseResult DXFParser::parse(std::istream& input) {
             }
             // Entity types
             else if (state.inEntitiesSection) {
+                // Parse the entity - parseLine/Arc/Circle will consume groups
+                // and set state.lookahead when they encounter the next entity
                 auto entity = parseEntity(input, value, state);
                 if (entity.has_value()) {
                     state.result.entities.push_back(entity.value());
@@ -69,6 +83,7 @@ DXFParseResult DXFParser::parse(std::istream& input) {
                 } else {
                     state.result.skippedEntities++;
                 }
+                // Lookahead will be processed in next iteration
             }
         }
     }
@@ -132,11 +147,11 @@ std::optional<DXFEntity> DXFParser::parseLine(std::istream& input, ParserState& 
     std::string value;
     size_t startLine = state.lineNumber;
 
+    // Read groups until we hit code 0 (next entity) or end of stream
     while (readGroup(input, code, value, state.lineNumber)) {
         if (code == 0) {
-            // Put back for next entity
-            input.seekg(-(static_cast<std::streamoff>(value.length()) + 2), std::ios::cur);
-            state.lineNumber -= 2;
+            // Save for next entity parsing
+            state.lookahead = GroupPair(code, value);
             break;
         }
 
@@ -208,8 +223,8 @@ std::optional<DXFEntity> DXFParser::parseArc(std::istream& input, ParserState& s
 
     while (readGroup(input, code, value, state.lineNumber)) {
         if (code == 0) {
-            input.seekg(-(static_cast<std::streamoff>(value.length()) + 2), std::ios::cur);
-            state.lineNumber -= 2;
+            // Save for next entity
+            state.lookahead = GroupPair(code, value);
             break;
         }
 
@@ -287,8 +302,8 @@ std::optional<DXFEntity> DXFParser::parseCircle(std::istream& input, ParserState
 
     while (readGroup(input, code, value, state.lineNumber)) {
         if (code == 0) {
-            input.seekg(-(static_cast<std::streamoff>(value.length()) + 2), std::ios::cur);
-            state.lineNumber -= 2;
+            // Save for next entity
+            state.lookahead = GroupPair(code, value);
             break;
         }
 
@@ -346,9 +361,8 @@ void DXFParser::skipEntity(std::istream& input, ParserState& state) {
 
     while (readGroup(input, code, value, state.lineNumber)) {
         if (code == 0) {
-            // Start of next entity
-            input.seekg(-(static_cast<std::streamoff>(value.length()) + 2), std::ios::cur);
-            state.lineNumber -= 2;
+            // Start of next entity - save it
+            state.lookahead = GroupPair(code, value);
             break;
         }
     }

@@ -2,6 +2,7 @@
 #include "geometry/GeometryConstants.h"
 #include <cmath>
 #include <sstream>
+#include <iostream>
 
 namespace OwnCAD {
 namespace Import {
@@ -15,7 +16,11 @@ using namespace OwnCAD::Geometry;
 ConversionResult GeometryConverter::convert(const std::vector<DXFEntity>& dxfEntities) {
     ConversionResult result;
 
-    for (const auto& dxfEntity : dxfEntities) {
+    std::cout << "\n=== GeometryConverter: Converting " << dxfEntities.size() << " DXF entities ===" << std::endl;
+
+    for (size_t i = 0; i < dxfEntities.size(); ++i) {
+        const auto& dxfEntity = dxfEntities[i];
+        std::cout << "\nEntity " << (i+1) << "/" << dxfEntities.size() << " (line " << dxfEntity.lineNumber << "):" << std::endl;
         std::optional<GeometryEntity> converted;
         std::string layer;
         std::string handle;
@@ -25,12 +30,19 @@ ConversionResult GeometryConverter::convert(const std::vector<DXFEntity>& dxfEnt
             using T = std::decay_t<decltype(entity)>;
 
             if constexpr (std::is_same_v<T, DXFLine>) {
+                std::cout << "  Type: LINE" << std::endl;
+                std::cout << "  Start: (" << entity.startX << ", " << entity.startY << ")" << std::endl;
+                std::cout << "  End: (" << entity.endX << ", " << entity.endY << ")" << std::endl;
+
                 auto line = convertLine(entity);
                 if (line.has_value()) {
+                    double len = line->length();
+                    std::cout << "  ✅ VALID - Length: " << len << std::endl;
                     converted = GeometryEntity(line.value());
                     layer = entity.layer;
                     handle = entity.handle;
                 } else {
+                    std::cout << "  ❌ REJECTED - Zero-length or invalid coordinates" << std::endl;
                     result.errors.push_back(
                         createErrorMessage("LINE", "Invalid geometry (zero-length or bad coordinates)",
                                          dxfEntity.lineNumber)
@@ -39,12 +51,19 @@ ConversionResult GeometryConverter::convert(const std::vector<DXFEntity>& dxfEnt
                 }
             }
             else if constexpr (std::is_same_v<T, DXFArc>) {
+                std::cout << "  Type: ARC" << std::endl;
+                std::cout << "  Center: (" << entity.centerX << ", " << entity.centerY << ")" << std::endl;
+                std::cout << "  Radius: " << entity.radius << std::endl;
+                std::cout << "  Angles: " << entity.startAngle << "° to " << entity.endAngle << "°" << std::endl;
+
                 auto arc = convertArc(entity);
                 if (arc.has_value()) {
+                    std::cout << "  ✅ VALID" << std::endl;
                     converted = GeometryEntity(arc.value());
                     layer = entity.layer;
                     handle = entity.handle;
                 } else {
+                    std::cout << "  ❌ REJECTED - Zero-radius or degenerate" << std::endl;
                     result.errors.push_back(
                         createErrorMessage("ARC", "Invalid geometry (zero-radius or degenerate)",
                                          dxfEntity.lineNumber)
@@ -53,12 +72,18 @@ ConversionResult GeometryConverter::convert(const std::vector<DXFEntity>& dxfEnt
                 }
             }
             else if constexpr (std::is_same_v<T, DXFCircle>) {
+                std::cout << "  Type: CIRCLE" << std::endl;
+                std::cout << "  Center: (" << entity.centerX << ", " << entity.centerY << ")" << std::endl;
+                std::cout << "  Radius: " << entity.radius << std::endl;
+
                 auto arc = convertCircle(entity);
                 if (arc.has_value()) {
+                    std::cout << "  ✅ VALID (converted to full arc)" << std::endl;
                     converted = GeometryEntity(arc.value());
                     layer = entity.layer;
                     handle = entity.handle;
                 } else {
+                    std::cout << "  ❌ REJECTED - Zero-radius" << std::endl;
                     result.errors.push_back(
                         createErrorMessage("CIRCLE", "Invalid geometry (zero-radius)",
                                          dxfEntity.lineNumber)
@@ -81,6 +106,19 @@ ConversionResult GeometryConverter::convert(const std::vector<DXFEntity>& dxfEnt
             result.totalConverted++;
         }
     }
+
+    std::cout << "\n=== Conversion Summary ===" << std::endl;
+    std::cout << "  Total converted: " << result.totalConverted << std::endl;
+    std::cout << "  Total failed: " << result.totalFailed << std::endl;
+    std::cout << "  Errors: " << result.errors.size() << std::endl;
+
+    if (!result.errors.empty()) {
+        std::cout << "\n  Error details:" << std::endl;
+        for (const auto& error : result.errors) {
+            std::cout << "    - " << error << std::endl;
+        }
+    }
+    std::cout << "========================\n" << std::endl;
 
     result.success = result.errors.empty();
     return result;

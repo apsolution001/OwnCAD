@@ -61,6 +61,18 @@ public:
 
 private:
     /**
+     * @brief Group code/value pair for lookahead
+     */
+    struct GroupPair {
+        int code;
+        std::string value;
+        bool valid;
+
+        GroupPair() : code(0), valid(false) {}
+        GroupPair(int c, const std::string& v) : code(c), value(v), valid(true) {}
+    };
+
+    /**
      * @brief Internal parser state
      */
     struct ParserState {
@@ -68,6 +80,7 @@ private:
         std::string currentSection;
         bool inEntitiesSection;
         DXFParseResult result;
+        GroupPair lookahead;  // Lookahead group for entity parsing
 
         ParserState()
             : lineNumber(0)
@@ -94,17 +107,17 @@ private:
     );
 
     /**
-     * @brief Parse LINE entity
+     * @brief Parse LINE entity (uses lookahead from state)
      */
     static std::optional<DXFEntity> parseLine(std::istream& input, ParserState& state);
 
     /**
-     * @brief Parse ARC entity
+     * @brief Parse ARC entity (uses lookahead from state)
      */
     static std::optional<DXFEntity> parseArc(std::istream& input, ParserState& state);
 
     /**
-     * @brief Parse CIRCLE entity
+     * @brief Parse CIRCLE entity (uses lookahead from state)
      */
     static std::optional<DXFEntity> parseCircle(std::istream& input, ParserState& state);
 

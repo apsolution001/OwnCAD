@@ -39,8 +39,10 @@ void TestGeometryMath::testAngleNormalization() {
     QVERIFY(std::abs(normalizeAngle(4 * PI) - 0.0) < GEOMETRY_EPSILON);
 
     // Signed normalization [-π, π)
+    // NOTE: The interval is HALF-OPEN: includes -π but EXCLUDES π
+    // So π wraps around to -π (they are geometrically equivalent)
     QVERIFY(std::abs(normalizeAngleSigned(0.0) - 0.0) < GEOMETRY_EPSILON);
-    QVERIFY(std::abs(normalizeAngleSigned(PI) - PI) < GEOMETRY_EPSILON);
+    QVERIFY(std::abs(normalizeAngleSigned(PI) - (-PI)) < GEOMETRY_EPSILON);  // FIX: PI → -PI
     QVERIFY(std::abs(normalizeAngleSigned(TWO_PI) - 0.0) < GEOMETRY_EPSILON);
     QVERIFY(std::abs(normalizeAngleSigned(3 * HALF_PI) - (-HALF_PI)) < GEOMETRY_EPSILON);
 }
