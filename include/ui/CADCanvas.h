@@ -151,8 +151,8 @@ private:
     void renderOrigin(QPainter& painter);
     void renderEntities(QPainter& painter);
     void renderEntity(QPainter& painter, const Import::GeometryEntityWithMetadata& entity);
-    void renderLine(QPainter& painter, const Geometry::Line2D& line);
-    void renderArc(QPainter& painter, const Geometry::Arc2D& arc);
+    void renderLine(QPainter& painter, const Geometry::Line2D& line, const Import::GeometryEntityWithMetadata& metadata);
+    void renderArc(QPainter& painter, const Geometry::Arc2D& arc, const Import::GeometryEntityWithMetadata& metadata);
 
     // Data members
     std::vector<Import::GeometryEntityWithMetadata> entities_;

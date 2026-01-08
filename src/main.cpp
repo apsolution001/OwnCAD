@@ -160,26 +160,41 @@ private slots:
         bool success = document_->loadDXFFile(fileName.toStdString());
 
         if (success) {
+            const auto& stats = document_->statistics();
+
             // Debug: Log entity count
             qDebug() << "DXF Import Success:";
-            qDebug() << "  Total entities loaded:" << document_->statistics().totalEntities;
-            qDebug() << "  Lines:" << document_->statistics().totalLines;
-            qDebug() << "  Arcs:" << document_->statistics().totalArcs;
-            qDebug() << "  Valid:" << document_->statistics().validEntities;
-            qDebug() << "  Invalid:" << document_->statistics().invalidEntities;
+            qDebug() << "  DXF entities imported:" << stats.dxfEntitiesImported;
+            qDebug() << "  Geometry segments (after decomposition):" << stats.totalSegments;
+            qDebug() << "  Lines:" << stats.totalLines;
+            qDebug() << "  Arcs:" << stats.totalArcs;
+            qDebug() << "  Valid:" << stats.validEntities;
+            qDebug() << "  Invalid:" << stats.invalidEntities;
 
             // Load geometry into canvas
             canvas_->setEntities(document_->entities());
             canvas_->zoomExtents();
 
             showValidationResults();
-            statusBar()->showMessage(
-                QString("Loaded: %1 entities (%2 lines, %3 arcs) | Zoom: Extents")
-                    .arg(document_->statistics().totalEntities)
-                    .arg(document_->statistics().totalLines)
-                    .arg(document_->statistics().totalArcs),
-                5000
-            );
+
+            // Status bar message - show DXF entities count (clearer for user)
+            QString message = QString("Loaded: %1 DXF entities")
+                .arg(stats.dxfEntitiesImported);
+
+            // Add decomposition info if polygons were decomposed
+            if (stats.totalSegments > stats.dxfEntitiesImported) {
+                message += QString(" → %1 segments (%2 lines, %3 arcs)")
+                    .arg(stats.totalSegments)
+                    .arg(stats.totalLines)
+                    .arg(stats.totalArcs);
+            } else {
+                message += QString(" (%1 lines, %2 arcs)")
+                    .arg(stats.totalLines)
+                    .arg(stats.totalArcs);
+            }
+
+            message += " | Zoom: Extents";
+            statusBar()->showMessage(message, 5000);
         } else {
             QString errorMsg = "Failed to load DXF file:\n\n";
             for (const auto& error : document_->importErrors()) {
@@ -266,14 +281,16 @@ private slots:
         if (result.passed()) {
             message += "<p style='color: green; font-size: 14px;'>"
                       "<b>✓ VALIDATION PASSED</b></p>";
-            message += QString("<p>All %1 entities are geometrically valid.</p>")
-                .arg(stats.totalEntities);
+            message += QString("<p>All %1 imported entities (%2 geometry segments) are valid.</p>")
+                .arg(stats.dxfEntitiesImported)
+                .arg(stats.totalSegments);
         } else {
             message += "<p style='color: red; font-size: 14px;'>"
                       "<b>✗ VALIDATION FAILED</b></p>";
-            message += QString("<p>Found <b>%1</b> issues in %2 entities:</p>")
+            message += QString("<p>Found <b>%1</b> issues in %2 imported entities (%3 segments):</p>")
                 .arg(result.issueCount())
-                .arg(stats.totalEntities);
+                .arg(stats.dxfEntitiesImported)
+                .arg(stats.totalSegments);
 
             message += "<ul>";
             if (stats.zeroLengthLines > 0) {

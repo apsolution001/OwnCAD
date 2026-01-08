@@ -1,7 +1,9 @@
 #include "ui/CADCanvas.h"
 #include "geometry/GeometryConstants.h"
 #include "geometry/BoundingBox.h"
+#include "import/DXFColors.h"
 #include <QPainter>
+#include <QPainterPath>
 #include <QPaintEvent>
 #include <QMouseEvent>
 #include <QWheelEvent>
@@ -197,7 +199,21 @@ CADCanvas::~CADCanvas() {
 
 void CADCanvas::setEntities(const std::vector<Import::GeometryEntityWithMetadata>& entities) {
     entities_ = entities;
-    qDebug() << "CADCanvas::setEntities() - Received" << entities_.size() << "entities";
+
+    // Count entity types for logging
+    int lineCount = 0;
+    int arcCount = 0;
+    for (const auto& e : entities_) {
+        if (std::holds_alternative<Geometry::Line2D>(e.entity)) {
+            lineCount++;
+        } else if (std::holds_alternative<Geometry::Arc2D>(e.entity)) {
+            arcCount++;
+        }
+    }
+
+    qDebug() << "CADCanvas: Loaded" << entities_.size() << "segments ("
+             << lineCount << "lines," << arcCount << "arcs)";
+
     update();  // Trigger repaint
 }
 
@@ -375,70 +391,62 @@ void CADCanvas::renderOrigin(QPainter& painter) {
 }
 
 void CADCanvas::renderEntities(QPainter& painter) {
-    qDebug() << "CADCanvas::renderEntities() - Rendering" << entities_.size() << "entities";
-
-    int lineCount = 0;
-    int arcCount = 0;
-
     for (const auto& entityWithMeta : entities_) {
-        if (std::holds_alternative<Geometry::Line2D>(entityWithMeta.entity)) {
-            lineCount++;
-        } else if (std::holds_alternative<Geometry::Arc2D>(entityWithMeta.entity)) {
-            arcCount++;
-        }
         renderEntity(painter, entityWithMeta);
     }
 
-    qDebug() << "  Lines rendered:" << lineCount;
-    qDebug() << "  Arcs rendered:" << arcCount;
+    // Note: Removed verbose logging - it was printing on every repaint
+    // Use qDebug() in setEntities() instead for import logging
 }
 
 void CADCanvas::renderEntity(QPainter& painter, const Import::GeometryEntityWithMetadata& entityWithMeta) {
     const auto& entity = entityWithMeta.entity;
 
     if (std::holds_alternative<Geometry::Line2D>(entity)) {
-        renderLine(painter, std::get<Geometry::Line2D>(entity));
+        renderLine(painter, std::get<Geometry::Line2D>(entity), entityWithMeta);
     } else if (std::holds_alternative<Geometry::Arc2D>(entity)) {
-        renderArc(painter, std::get<Geometry::Arc2D>(entity));
+        renderArc(painter, std::get<Geometry::Arc2D>(entity), entityWithMeta);
     }
 }
 
-void CADCanvas::renderLine(QPainter& painter, const Geometry::Line2D& line) {
+void CADCanvas::renderLine(QPainter& painter, const Geometry::Line2D& line, const Import::GeometryEntityWithMetadata& metadata) {
     QPointF p1 = viewport_.worldToScreen(line.start());
     QPointF p2 = viewport_.worldToScreen(line.end());
 
-    painter.setPen(QPen(QColor(0, 0, 0), 2));
+    // Get color from DXF
+    QColor color = Import::DXFColors::toQColor(metadata.colorNumber, QColor(0, 0, 0));
+
+    painter.setPen(QPen(color, 2));
     painter.drawLine(p1, p2);
 }
 
-void CADCanvas::renderArc(QPainter& painter, const Geometry::Arc2D& arc) {
-    QPointF center = viewport_.worldToScreen(arc.center());
-    double radiusScreen = arc.radius() * viewport_.zoomLevel();
+void CADCanvas::renderArc(QPainter& painter, const Geometry::Arc2D& arc, const Import::GeometryEntityWithMetadata& metadata) {
+    // Get color from DXF
+    QColor color = Import::DXFColors::toQColor(metadata.colorNumber, QColor(0, 0, 0));
 
-    // Qt uses 1/16th degree units
-    double startAngleDeg = arc.startAngle() * 180.0 / Geometry::PI;
-    double sweepAngleDeg = arc.sweepAngle() * 180.0 / Geometry::PI;
+    // SIMPLIFIED ROBUST APPROACH: Sample points along arc and draw path
+    // This avoids all the complex angle transformation math that's been causing issues
+    const int numSamples = std::max(12, static_cast<int>(arc.sweepAngle() * 180.0 / Geometry::PI / 15.0));  // ~15° per segment
 
-    // Qt angles: 0° is 3 o'clock, positive is counter-clockwise
-    // Our angles: 0° is 3 o'clock, positive is counter-clockwise
-    // So we need to adjust for Qt's coordinate system (Y grows down)
-    startAngleDeg = -startAngleDeg;  // Flip for screen space
+    QPainterPath path;
+    bool firstPoint = true;
 
-    if (!arc.isCounterClockwise()) {
-        sweepAngleDeg = -sweepAngleDeg;
-    } else {
-        sweepAngleDeg = -sweepAngleDeg;  // Already flipped by Y inversion
+    for (int i = 0; i <= numSamples; ++i) {
+        double t = static_cast<double>(i) / numSamples;
+        Geometry::Point2D worldPt = arc.pointAt(t);
+        QPointF screenPt = viewport_.worldToScreen(worldPt);
+
+        if (firstPoint) {
+            path.moveTo(screenPt);
+            firstPoint = false;
+        } else {
+            path.lineTo(screenPt);
+        }
     }
 
-    int startAngle16 = static_cast<int>(startAngleDeg * 16);
-    int spanAngle16 = static_cast<int>(sweepAngleDeg * 16);
-
-    QRectF rect(center.x() - radiusScreen, center.y() - radiusScreen,
-                2 * radiusScreen, 2 * radiusScreen);
-
-    painter.setPen(QPen(QColor(0, 0, 0), 2));
+    painter.setPen(QPen(color, 2));
     painter.setBrush(Qt::NoBrush);
-    painter.drawArc(rect, startAngle16, spanAngle16);
+    painter.drawPath(path);
 }
 
 // ============================================================================

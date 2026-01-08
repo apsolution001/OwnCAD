@@ -134,6 +134,9 @@ std::optional<DXFEntity> DXFParser::parseEntity(
     else if (entityType == "CIRCLE") {
         return parseCircle(input, state);
     }
+    else if (entityType == "LWPOLYLINE") {
+        return parseLWPolyline(input, state);
+    }
     else {
         // Unsupported entity - skip it
         skipEntity(input, state);
@@ -161,6 +164,9 @@ std::optional<DXFEntity> DXFParser::parseLine(std::istream& input, ParserState& 
                 break;
             case 5:  // Handle
                 line.handle = value;
+                break;
+            case 62:  // Color number
+                stringToInt(value, line.colorNumber);
                 break;
             case 10:  // Start X
                 if (!stringToDouble(value, line.startX) || !isValidNumber(line.startX)) {
@@ -234,6 +240,9 @@ std::optional<DXFEntity> DXFParser::parseArc(std::istream& input, ParserState& s
                 break;
             case 5:  // Handle
                 arc.handle = value;
+                break;
+            case 62:  // Color number
+                stringToInt(value, arc.colorNumber);
                 break;
             case 10:  // Center X
                 if (!stringToDouble(value, arc.centerX) || !isValidNumber(arc.centerX)) {
@@ -314,6 +323,9 @@ std::optional<DXFEntity> DXFParser::parseCircle(std::istream& input, ParserState
             case 5:  // Handle
                 circle.handle = value;
                 break;
+            case 62:  // Color number
+                stringToInt(value, circle.colorNumber);
+                break;
             case 10:  // Center X
                 if (!stringToDouble(value, circle.centerX) || !isValidNumber(circle.centerX)) {
                     state.result.errors.push_back(
@@ -350,6 +362,104 @@ std::optional<DXFEntity> DXFParser::parseCircle(std::istream& input, ParserState
     DXFEntity entity;
     entity.type = DXFEntityType::Circle;
     entity.data = circle;
+    entity.lineNumber = startLine;
+
+    return entity;
+}
+
+std::optional<DXFEntity> DXFParser::parseLWPolyline(std::istream& input, ParserState& state) {
+    DXFLWPolyline polyline;
+    int code;
+    std::string value;
+    size_t startLine = state.lineNumber;
+    int numVertices = 0;
+
+    // Current vertex being constructed
+    DXFVertex currentVertex;
+    bool hasX = false;
+    bool hasY = false;
+
+    while (readGroup(input, code, value, state.lineNumber)) {
+        if (code == 0) {
+            // Save for next entity
+            state.lookahead = GroupPair(code, value);
+            break;
+        }
+
+        switch (code) {
+            case 8:  // Layer
+                polyline.layer = value;
+                break;
+            case 5:  // Handle
+                polyline.handle = value;
+                break;
+            case 70:  // Flags (1 = closed)
+                {
+                    int flags;
+                    if (stringToInt(value, flags)) {
+                        polyline.closed = (flags & 1) != 0;
+                    }
+                }
+                break;
+            case 62:  // Color number
+                stringToInt(value, polyline.colorNumber);
+                break;
+            case 90:  // Number of vertices
+                if (!stringToInt(value, numVertices)) {
+                    state.result.errors.push_back(
+                        "LWPOLYLINE: Invalid vertex count at line " + std::to_string(state.lineNumber)
+                    );
+                }
+                break;
+            case 10:  // Vertex X
+                // If we have a complete vertex, save it
+                if (hasX && hasY) {
+                    polyline.vertices.push_back(currentVertex);
+                    currentVertex = DXFVertex();  // Reset
+                    hasX = hasY = false;
+                }
+                if (!stringToDouble(value, currentVertex.x) || !isValidNumber(currentVertex.x)) {
+                    state.result.errors.push_back(
+                        "LWPOLYLINE: Invalid X coordinate at line " + std::to_string(state.lineNumber)
+                    );
+                    skipEntity(input, state);
+                    return std::nullopt;
+                }
+                hasX = true;
+                break;
+            case 20:  // Vertex Y
+                if (!stringToDouble(value, currentVertex.y) || !isValidNumber(currentVertex.y)) {
+                    state.result.errors.push_back(
+                        "LWPOLYLINE: Invalid Y coordinate at line " + std::to_string(state.lineNumber)
+                    );
+                    skipEntity(input, state);
+                    return std::nullopt;
+                }
+                hasY = true;
+                break;
+            case 42:  // Bulge (for arc segments)
+                stringToDouble(value, currentVertex.bulge);
+                break;
+        }
+    }
+
+    // Save last vertex if complete
+    if (hasX && hasY) {
+        polyline.vertices.push_back(currentVertex);
+    }
+
+    // Validate: must have at least 2 vertices
+    if (polyline.vertices.size() < 2) {
+        state.result.errors.push_back(
+            "LWPOLYLINE: Too few vertices (" + std::to_string(polyline.vertices.size()) +
+            ") at line " + std::to_string(startLine)
+        );
+        return std::nullopt;
+    }
+
+    DXFEntity entity;
+    entity.type = DXFEntityType::LWPolyline;
+    entity.data = polyline;
     entity.lineNumber = startLine;
 
     return entity;

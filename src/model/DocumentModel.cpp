@@ -57,6 +57,9 @@ bool DocumentModel::loadDXFFile(const std::string& filePath) {
     // Store converted entities
     entities_ = conversionResult.entities;
 
+    // Store original DXF entity count (before decomposition)
+    statistics_.dxfEntitiesImported = conversionResult.totalConverted;
+
     // Add conversion errors to warnings (non-fatal)
     importWarnings_.insert(
         importWarnings_.end(),
@@ -118,8 +121,13 @@ std::vector<std::variant<Line2D, Arc2D>> DocumentModel::getEntityVariants() cons
 // ============================================================================
 
 void DocumentModel::calculateStatistics() {
+    // Don't reset dxfEntitiesImported - it was set during load
+    size_t originalCount = statistics_.dxfEntitiesImported;
     statistics_ = DocumentStatistics();
-    statistics_.totalEntities = entities_.size();
+    statistics_.dxfEntitiesImported = originalCount;
+
+    // Count actual geometry segments
+    statistics_.totalSegments = entities_.size();
 
     for (const auto& entityWithMeta : entities_) {
         std::visit([&](auto&& entity) {
@@ -154,7 +162,7 @@ void DocumentModel::calculateStatistics() {
         }
     }
 
-    statistics_.validEntities = statistics_.totalEntities - statistics_.invalidEntities;
+    statistics_.validEntities = statistics_.totalSegments - statistics_.invalidEntities;
 }
 
 // ============================================================================

@@ -24,6 +24,7 @@ ConversionResult GeometryConverter::convert(const std::vector<DXFEntity>& dxfEnt
         std::optional<GeometryEntity> converted;
         std::string layer;
         std::string handle;
+        int colorNumber = 256;  // Default: BYLAYER
 
         // Convert based on type
         std::visit([&](auto&& entity) {
@@ -41,7 +42,8 @@ ConversionResult GeometryConverter::convert(const std::vector<DXFEntity>& dxfEnt
                     converted = GeometryEntity(line.value());
                     layer = entity.layer;
                     handle = entity.handle;
-                } else {
+                    colorNumber = entity.colorNumber;
+                } else{
                     std::cout << "  ❌ REJECTED - Zero-length or invalid coordinates" << std::endl;
                     result.errors.push_back(
                         createErrorMessage("LINE", "Invalid geometry (zero-length or bad coordinates)",
@@ -62,6 +64,7 @@ ConversionResult GeometryConverter::convert(const std::vector<DXFEntity>& dxfEnt
                     converted = GeometryEntity(arc.value());
                     layer = entity.layer;
                     handle = entity.handle;
+                    colorNumber = entity.colorNumber;
                 } else {
                     std::cout << "  ❌ REJECTED - Zero-radius or degenerate" << std::endl;
                     result.errors.push_back(
@@ -82,6 +85,7 @@ ConversionResult GeometryConverter::convert(const std::vector<DXFEntity>& dxfEnt
                     converted = GeometryEntity(arc.value());
                     layer = entity.layer;
                     handle = entity.handle;
+                    colorNumber = entity.colorNumber;
                 } else {
                     std::cout << "  ❌ REJECTED - Zero-radius" << std::endl;
                     result.errors.push_back(
@@ -91,14 +95,55 @@ ConversionResult GeometryConverter::convert(const std::vector<DXFEntity>& dxfEnt
                     result.totalFailed++;
                 }
             }
+            else if constexpr (std::is_same_v<T, DXFLWPolyline>) {
+                std::cout << "  Type: LWPOLYLINE" << std::endl;
+                std::cout << "  Vertices: " << entity.vertices.size() << std::endl;
+                std::cout << "  Closed: " << (entity.closed ? "yes" : "no") << std::endl;
+
+                // Convert polyline to multiple line segments
+                auto lines = convertPolyline(entity);
+                std::cout << "  Converted to " << lines.size() << " line segments" << std::endl;
+
+                if (!lines.empty()) {
+                    // Add all line segments individually
+                    for (const auto& line : lines) {
+                        GeometryEntityWithMetadata entityWithMeta{
+                            GeometryEntity(line),  // entity
+                            entity.layer,          // layer
+                            entity.handle,         // handle (same for all segments)
+                            entity.colorNumber,    // color
+                            dxfEntity.lineNumber   // sourceLineNumber
+                        };
+                        result.entities.push_back(entityWithMeta);
+                    }
+
+                    // Count this as ONE converted entity (the polyline)
+                    // even though it created multiple line segments
+                    result.totalConverted++;
+
+                    std::cout << "  ✅ VALID - Polyline decomposed into " << lines.size() << " line segments" << std::endl;
+                } else {
+                    std::cout << "  ❌ REJECTED - No valid segments" << std::endl;
+                    result.errors.push_back(
+                        createErrorMessage("LWPOLYLINE", "No valid line segments could be created",
+                                         dxfEntity.lineNumber)
+                    );
+                    result.totalFailed++;
+                }
+
+                // Mark as processed (don't add to result below)
+                layer.clear();
+                handle.clear();
+            }
         }, dxfEntity.data);
 
         // Add to result if conversion succeeded
-        if (converted.has_value()) {
+        if (converted.has_value() && !layer.empty()) {
             GeometryEntityWithMetadata entityWithMeta{
                 converted.value(),  // entity
                 layer,              // layer
                 handle,             // handle
+                colorNumber,        // color
                 dxfEntity.lineNumber // sourceLineNumber
             };
 
@@ -183,6 +228,54 @@ std::optional<Arc2D> GeometryConverter::convertCircle(const DXFCircle& dxfCircle
     // Convert circle to full arc (0° to 360°)
     // Use factory pattern - will validate
     return Arc2D::create(center, dxfCircle.radius, 0.0, TWO_PI, true);
+}
+
+std::vector<Line2D> GeometryConverter::convertPolyline(const DXFLWPolyline& polyline) {
+    std::vector<Line2D> lines;
+
+    if (polyline.vertices.size() < 2) {
+        return lines;  // Empty result
+    }
+
+    // Create line segments between consecutive vertices
+    for (size_t i = 0; i < polyline.vertices.size() - 1; ++i) {
+        const auto& v1 = polyline.vertices[i];
+        const auto& v2 = polyline.vertices[i + 1];
+
+        // Validate coordinates
+        if (!validateCoordinates(v1.x, v1.y) || !validateCoordinates(v2.x, v2.y)) {
+            continue;  // Skip invalid vertices
+        }
+
+        Point2D p1(v1.x, v1.y);
+        Point2D p2(v2.x, v2.y);
+
+        // Create line (factory will reject zero-length)
+        auto line = Line2D::create(p1, p2);
+        if (line.has_value()) {
+            lines.push_back(line.value());
+        }
+    }
+
+    // If closed, add closing segment from last to first vertex
+    if (polyline.closed && polyline.vertices.size() >= 2) {
+        const auto& vFirst = polyline.vertices.front();
+        const auto& vLast = polyline.vertices.back();
+
+        if (validateCoordinates(vFirst.x, vFirst.y) &&
+            validateCoordinates(vLast.x, vLast.y)) {
+
+            Point2D p1(vLast.x, vLast.y);
+            Point2D p2(vFirst.x, vFirst.y);
+
+            auto line = Line2D::create(p1, p2);
+            if (line.has_value()) {
+                lines.push_back(line.value());
+            }
+        }
+    }
+
+    return lines;
 }
 
 // ============================================================================

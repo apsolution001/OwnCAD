@@ -92,11 +92,13 @@ set(IMPORT_HEADERS
     include/import/DXFEntity.h
     include/import/DXFParser.h
     include/import/GeometryConverter.h
+    include/import/DXFColors.h
 )
 
 set(IMPORT_SOURCES
     src/import/DXFParser.cpp
     src/import/GeometryConverter.cpp
+    src/import/DXFColors.cpp
 )
 
 add_library(import STATIC
@@ -106,6 +108,7 @@ add_library(import STATIC
 
 target_link_libraries(import
     Qt6::Core
+    Qt6::Gui
     geometry
 )
 

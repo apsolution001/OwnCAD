@@ -22,6 +22,7 @@ struct GeometryEntityWithMetadata {
     GeometryEntity entity;
     std::string layer;
     std::string handle;
+    int colorNumber;  // DXF color code (1-255, 256=BYLAYER, 0=BYBLOCK)
     size_t sourceLineNumber;  // For error reporting
 };
 
@@ -90,6 +91,16 @@ public:
      * @return Arc2D if valid, nullopt if invalid
      */
     static std::optional<Geometry::Arc2D> convertCircle(const DXFCircle& dxfCircle);
+
+    /**
+     * @brief Convert DXF LWPOLYLINE to multiple Line2D segments
+     * @param polyline DXF polyline entity
+     * @return Vector of Line2D segments (empty if invalid)
+     *
+     * Note: Bulge values (arc segments) are currently ignored.
+     * All segments are converted to straight lines.
+     */
+    static std::vector<Geometry::Line2D> convertPolyline(const DXFLWPolyline& polyline);
 
     /**
      * @brief Convert degrees to radians

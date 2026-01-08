@@ -13,44 +13,44 @@ Each task is small enough to implement, test, and verify in one session.
 - [x] DocumentModel loads DXF files
 - [x] Validation on import
 
-### 0.2 CAD Canvas with Geometry Rendering ⏳
+### 0.2 CAD Canvas with Geometry Rendering ✅
 **GOAL: User can SEE loaded geometry**
 
-- [ ] Create `CADCanvas` widget class (inherits QWidget)
-- [ ] Implement viewport transformation system
-  - [ ] worldToScreen(Point2D) → QPointF
-  - [ ] screenToWorld(QPointF) → Point2D
-- [ ] Implement basic geometry rendering
-  - [ ] Render Line2D entities
-  - [ ] Render Arc2D entities
-  - [ ] Apply proper line styles (width, color)
-- [ ] Replace MainWindow placeholder with CADCanvas
-- [ ] Wire up DocumentModel to canvas
-- [ ] Verify: Open DXF file → See geometry rendered
+- [x] Create `CADCanvas` widget class (inherits QWidget)
+- [x] Implement viewport transformation system
+  - [x] worldToScreen(Point2D) → QPointF
+  - [x] screenToWorld(QPointF) → Point2D
+- [x] Implement basic geometry rendering
+  - [x] Render Line2D entities
+  - [x] Render Arc2D entities
+  - [x] Apply proper line styles (width, color)
+- [x] Replace MainWindow placeholder with CADCanvas
+- [x] Wire up DocumentModel to canvas
+- [x] Verify: Open DXF file → See geometry rendered
 
 **Deliverable**: Geometry visible on screen after DXF import
 
-### 0.3 Pan / Zoom Functionality ⏳
+### 0.3 Pan / Zoom Functionality ✅
 **GOAL: User can navigate the viewport**
 
 #### Pan
-- [ ] Middle mouse button drag to pan
-- [ ] Track viewport offset (panX, panY)
-- [ ] Update worldToScreen transformation
-- [ ] Show pan cursor feedback
+- [x] Middle mouse button drag to pan
+- [x] Track viewport offset (panX, panY)
+- [x] Update worldToScreen transformation
+- [x] Show pan cursor feedback
 
 #### Zoom
-- [ ] Mouse wheel to zoom in/out
-- [ ] Zoom centered on mouse cursor position
-- [ ] Track zoom level (min: 0.01, max: 100)
-- [ ] Clamp zoom to prevent overflow
-- [ ] Update worldToScreen transformation
-- [ ] Show zoom level in status bar
+- [x] Mouse wheel to zoom in/out
+- [x] Zoom centered on mouse cursor position
+- [x] Track zoom level (min: 0.01, max: 100)
+- [x] Clamp zoom to prevent overflow
+- [x] Update worldToScreen transformation
+- [x] Show zoom level in status bar
 
 #### Viewport State
-- [ ] Create Viewport class to manage state
-- [ ] Store: panX, panY, zoomLevel
-- [ ] Methods: reset(), fitToContent(), zoomExtents()
+- [x] Create Viewport class to manage state
+- [x] Store: panX, panY, zoomLevel
+- [x] Methods: reset(), fitToContent(), zoomExtents()
 
 **Deliverable**: Smooth pan and zoom navigation
 

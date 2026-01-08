@@ -13,9 +13,10 @@ namespace Model {
  * @brief Statistics about loaded document
  */
 struct DocumentStatistics {
-    size_t totalEntities;
-    size_t totalLines;
-    size_t totalArcs;
+    size_t dxfEntitiesImported;   // Original DXF entities (before decomposition)
+    size_t totalSegments;          // Total geometry segments (after polygon decomposition)
+    size_t totalLines;             // Line segments
+    size_t totalArcs;              // Arc segments
     size_t validEntities;
     size_t invalidEntities;
     size_t zeroLengthLines;
@@ -23,10 +24,13 @@ struct DocumentStatistics {
     size_t numericallyUnstable;
 
     DocumentStatistics()
-        : totalEntities(0), totalLines(0), totalArcs(0)
+        : dxfEntitiesImported(0), totalSegments(0), totalLines(0), totalArcs(0)
         , validEntities(0), invalidEntities(0)
         , zeroLengthLines(0), zeroRadiusArcs(0)
         , numericallyUnstable(0) {}
+
+    // For backwards compatibility
+    size_t totalEntities() const { return dxfEntitiesImported; }
 };
 
 /**
