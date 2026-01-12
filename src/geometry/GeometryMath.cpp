@@ -206,6 +206,116 @@ bool segmentsIntersect(const Line2D& l1, const Line2D& l2) noexcept {
     return segmentSegmentIntersection(l1, l2).has_value();
 }
 
+std::vector<Point2D> intersectLineArc(const Line2D& line, const Arc2D& arc) noexcept {
+    std::vector<Point2D> intersections;
+
+    // Line: P = P1 + t * (P2 - P1), t in [0, 1]
+    // Circle: (x - cx)^2 + (y - cy)^2 = R^2
+    
+    // Transform to local coordinates relative to arc center
+    double x1 = line.start().x() - arc.center().x();
+    double y1 = line.start().y() - arc.center().y();
+    double x2 = line.end().x() - arc.center().x();
+    double y2 = line.end().y() - arc.center().y();
+    
+    double dx = x2 - x1;
+    double dy = y2 - y1;
+    double dr2 = dx * dx + dy * dy;
+    double D = x1 * y2 - x2 * y1;
+    
+    double r = arc.radius();
+    double discriminant = r * r * dr2 - D * D;
+    
+    if (discriminant < 0) {
+        return intersections; // No line-circle intersection
+    }
+    
+    double sqrtDisc = std::sqrt(discriminant);
+    
+    // Potential intersection points on infinite line
+    double ix1 = (D * dy + (dy < 0 ? -1 : 1) * dx * sqrtDisc) / dr2;
+    double iy1 = (-D * dx + std::abs(dy) * sqrtDisc) / dr2;
+    
+    double ix2 = (D * dy - (dy < 0 ? -1 : 1) * dx * sqrtDisc) / dr2;
+    double iy2 = (-D * dx - std::abs(dy) * sqrtDisc) / dr2;
+    
+    // Convert back to world coordinates
+    Point2D p1(ix1 + arc.center().x(), iy1 + arc.center().y());
+    Point2D p2(ix2 + arc.center().x(), iy2 + arc.center().y());
+    
+    // Check if points are on the line segment
+    // Using simple bounding box check + tolerance for numerical stability
+    auto isOnSegment = [&](const Point2D& p) {
+        return distancePointToSegment(p, line) < GEOMETRY_EPSILON;
+    };
+    
+    // Check if points are on the arc (angular sweep)
+    auto isOnArc = [&](const Point2D& p) {
+        return distancePointToArc(p, arc) < GEOMETRY_EPSILON;
+    };
+    
+    if (isOnSegment(p1) && isOnArc(p1)) {
+        intersections.push_back(p1);
+    }
+    
+    // Check if p2 is distinct from p1 before adding
+    if (discriminant > GEOMETRY_EPSILON && isOnSegment(p2) && isOnArc(p2)) {
+        if (intersections.empty() || distanceSquared(p1, p2) > GEOMETRY_EPSILON * GEOMETRY_EPSILON) {
+            intersections.push_back(p2);
+        }
+    }
+    
+    return intersections;
+}
+
+std::vector<Point2D> intersectArcArc(const Arc2D& arc1, const Arc2D& arc2) noexcept {
+    std::vector<Point2D> intersections;
+    
+    double d2 = distanceSquared(arc1.center(), arc2.center());
+    double d = std::sqrt(d2);
+    
+    double r1 = arc1.radius();
+    double r2 = arc2.radius();
+    
+    // Circle-circle intersection checks
+    if (d > r1 + r2 || d < std::abs(r1 - r2) || d < GEOMETRY_EPSILON) {
+        return intersections; // Separate, contained, or concentric
+    }
+    
+    double a = (r1 * r1 - r2 * r2 + d2) / (2 * d);
+    double h = std::sqrt(std::max(0.0, r1 * r1 - a * a));
+    
+    double x2 = arc1.center().x() + a * (arc2.center().x() - arc1.center().x()) / d;
+    double y2 = arc1.center().y() + a * (arc2.center().y() - arc1.center().y()) / d;
+    
+    Point2D p1(
+        x2 + h * (arc2.center().y() - arc1.center().y()) / d,
+        y2 - h * (arc2.center().x() - arc1.center().x()) / d
+    );
+    
+    Point2D p2(
+        x2 - h * (arc2.center().y() - arc1.center().y()) / d,
+        y2 + h * (arc2.center().x() - arc1.center().x()) / d
+    );
+    
+    auto isOnArc = [&](const Point2D& p, const Arc2D& arc) {
+        return distancePointToArc(p, arc) < GEOMETRY_EPSILON;
+    };
+    
+    if (isOnArc(p1, arc1) && isOnArc(p1, arc2)) {
+        intersections.push_back(p1);
+    }
+    
+    // Avoid duplicates if tangent
+    if (distanceSquared(p1, p2) > GEOMETRY_EPSILON * GEOMETRY_EPSILON) {
+        if (isOnArc(p2, arc1) && isOnArc(p2, arc2)) {
+            intersections.push_back(p2);
+        }
+    }
+    
+    return intersections;
+}
+
 // ============================================================================
 // PROJECTION AND CLOSEST POINT
 // ============================================================================

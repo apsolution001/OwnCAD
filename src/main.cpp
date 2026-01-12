@@ -1,15 +1,19 @@
 #include <QApplication>
 #include <QMainWindow>
 #include <QLabel>
+#include <QFrame>
 #include <QVBoxLayout>
 #include <QWidget>
 #include <QMenuBar>
 #include <QMenu>
+#include <QAction>
+#include <QKeySequence>
 #include <QStatusBar>
 #include <QMessageBox>
 #include <QFileDialog>
 #include <QTextEdit>
 #include <QScrollArea>
+#include <QStringList>
 #include <QDebug>
 
 // Geometry headers
@@ -24,6 +28,7 @@
 
 // UI headers
 #include "ui/CADCanvas.h"
+#include "ui/GridSettingsDialog.h"
 
 using namespace OwnCAD::Geometry;
 using namespace OwnCAD::Model;
@@ -45,7 +50,10 @@ public:
     MainWindow(QWidget* parent = nullptr)
         : QMainWindow(parent)
         , document_(std::make_unique<DocumentModel>())
-        , canvas_(nullptr) {
+        , canvas_(nullptr)
+        , cursorPosLabel_(nullptr)
+        , zoomLabel_(nullptr)
+        , snapModeLabel_(nullptr) {
 
         setWindowTitle("OwnCAD - Industrial 2D CAD Validator v0.1.0");
         setMinimumSize(1024, 768);
@@ -56,8 +64,8 @@ public:
         // Create menu bar
         createMenus();
 
-        // Create status bar
-        statusBar()->showMessage("Ready - Pan: Middle Mouse | Zoom: Mouse Wheel | Grid: ON");
+        // Create status bar with permanent widgets
+        setupStatusBar();
 
         // Run geometry self-test
         runGeometrySelfTest();
@@ -101,7 +109,25 @@ private:
         viewMenu->addAction("&Reset View", this, &MainWindow::onResetView);
         viewMenu->addSeparator();
         viewMenu->addAction("Toggle &Grid", this, &MainWindow::onToggleGrid);
-        viewMenu->addAction("Toggle &Snap", this, &MainWindow::onToggleSnap);
+        viewMenu->addAction("Grid &Settings...", this, &MainWindow::onGridSettings);
+
+        // Snap submenu with keyboard shortcuts
+        QMenu* snapMenu = viewMenu->addMenu("&Snap");
+
+        QAction* gridSnapAction = snapMenu->addAction("Grid Snap", this, &MainWindow::onToggleGridSnap);
+        gridSnapAction->setShortcut(QKeySequence(Qt::Key_G));
+
+        QAction* endpointSnapAction = snapMenu->addAction("Endpoint Snap", this, &MainWindow::onToggleEndpointSnap);
+        endpointSnapAction->setShortcut(QKeySequence(Qt::Key_E));
+
+        QAction* midpointSnapAction = snapMenu->addAction("Midpoint Snap", this, &MainWindow::onToggleMidpointSnap);
+        midpointSnapAction->setShortcut(QKeySequence(Qt::Key_M));
+
+        QAction* nearestSnapAction = snapMenu->addAction("Nearest Snap", this, &MainWindow::onToggleNearestSnap);
+        nearestSnapAction->setShortcut(QKeySequence(Qt::Key_N));
+
+        snapMenu->addSeparator();
+        snapMenu->addAction("Snap Settings...", this, &MainWindow::onSnapSettings);
 
         // Tools menu
         QMenu* toolsMenu = menuBar()->addMenu("&Tools");
@@ -110,6 +136,34 @@ private:
         // Help menu
         QMenu* helpMenu = menuBar()->addMenu("&Help");
         helpMenu->addAction("&About", this, &MainWindow::onAbout);
+    }
+
+    void setupStatusBar() {
+        // Create permanent status bar widgets (right to left order)
+
+        // Snap mode indicator (rightmost)
+        snapModeLabel_ = new QLabel("Snap: Grid");
+        snapModeLabel_->setMinimumWidth(180);
+        snapModeLabel_->setAlignment(Qt::AlignCenter);
+        snapModeLabel_->setFrameStyle(QFrame::Panel | QFrame::Sunken);
+        statusBar()->addPermanentWidget(snapModeLabel_);
+
+        // Zoom level indicator
+        zoomLabel_ = new QLabel("Zoom: 1.00x");
+        zoomLabel_->setMinimumWidth(100);
+        zoomLabel_->setAlignment(Qt::AlignCenter);
+        zoomLabel_->setFrameStyle(QFrame::Panel | QFrame::Sunken);
+        statusBar()->addPermanentWidget(zoomLabel_);
+
+        // Cursor position indicator (leftmost of permanent widgets)
+        cursorPosLabel_ = new QLabel("X: 0.000 | Y: 0.000");
+        cursorPosLabel_->setMinimumWidth(180);
+        cursorPosLabel_->setAlignment(Qt::AlignCenter);
+        cursorPosLabel_->setFrameStyle(QFrame::Panel | QFrame::Sunken);
+        statusBar()->addPermanentWidget(cursorPosLabel_);
+
+        // Set initial message in temporary area (left side)
+        statusBar()->showMessage("Ready - Pan: Middle Mouse | Zoom: Mouse Wheel");
     }
 
     void runGeometrySelfTest() {
@@ -243,28 +297,88 @@ private slots:
         );
     }
 
-    void onToggleSnap() {
+    void onGridSettings() {
+        // Get current grid settings
+        GridSettings current = canvas_->gridSettings();
+
+        // Show grid settings dialog
+        GridSettingsDialog dialog(current, this);
+        if (dialog.exec() == QDialog::Accepted) {
+            GridSettings newSettings = dialog.settings();
+            canvas_->setGridSettings(newSettings);
+
+            statusBar()->showMessage(
+                QString("Grid: %1 %2 spacing")
+                    .arg(newSettings.spacing, 0, 'f', 2)
+                    .arg(newSettings.units == GridUnits::Millimeters ? "mm" :
+                         newSettings.units == GridUnits::Centimeters ? "cm" : "in"),
+                3000
+            );
+        }
+    }
+
+    void onToggleGridSnap() {
         bool enabled = !canvas_->isSnapEnabled(SnapManager::SnapMode::Grid);
         canvas_->setSnapEnabled(SnapManager::SnapMode::Grid, enabled);
-        statusBar()->showMessage(
-            enabled ? "Snap: ON (Grid)" : "Snap: OFF",
-            2000
-        );
+        updateSnapStatus();
+    }
+
+    void onToggleEndpointSnap() {
+        bool enabled = !canvas_->isSnapEnabled(SnapManager::SnapMode::Endpoint);
+        canvas_->setSnapEnabled(SnapManager::SnapMode::Endpoint, enabled);
+        updateSnapStatus();
+    }
+
+    void onToggleMidpointSnap() {
+        bool enabled = !canvas_->isSnapEnabled(SnapManager::SnapMode::Midpoint);
+        canvas_->setSnapEnabled(SnapManager::SnapMode::Midpoint, enabled);
+        updateSnapStatus();
+    }
+
+    void onToggleNearestSnap() {
+        bool enabled = !canvas_->isSnapEnabled(SnapManager::SnapMode::Nearest);
+        canvas_->setSnapEnabled(SnapManager::SnapMode::Nearest, enabled);
+        updateSnapStatus();
+    }
+
+    void onSnapSettings() {
+        // TODO: Create dialog for snap tolerance configuration
+        QMessageBox::information(this, "Snap Settings",
+            "Snap tolerance configuration dialog will be implemented in Phase 1, Week 2.\n\n"
+            "Current snap modes can be toggled via View > Snap menu (G/E/M/N hotkeys).\n\n"
+            "Snap tolerance: 10 pixels (screen-space, zoom-independent)\n"
+            "Grid spacing: Configurable via View > Grid Settings");
+    }
+
+    void updateSnapStatus() {
+        // Update permanent status bar widget with active snap modes
+        QStringList activeSnaps;
+        if (canvas_->isSnapEnabled(SnapManager::SnapMode::Grid))
+            activeSnaps << "Grid";
+        if (canvas_->isSnapEnabled(SnapManager::SnapMode::Endpoint))
+            activeSnaps << "Endpoint";
+        if (canvas_->isSnapEnabled(SnapManager::SnapMode::Midpoint))
+            activeSnaps << "Midpoint";
+        if (canvas_->isSnapEnabled(SnapManager::SnapMode::Nearest))
+            activeSnaps << "Nearest";
+
+        if (activeSnaps.isEmpty()) {
+            snapModeLabel_->setText("Snap: OFF");
+        } else {
+            snapModeLabel_->setText(QString("Snap: %1").arg(activeSnaps.join(", ")));
+        }
     }
 
     void onViewportChanged(double zoom, double panX, double panY) {
-        // Update status bar with zoom level
-        statusBar()->showMessage(
-            QString("Zoom: %1x | Pan: (%2, %3)")
-                .arg(zoom, 0, 'f', 2)
-                .arg(panX, 0, 'f', 1)
-                .arg(panY, 0, 'f', 1)
-        );
+        Q_UNUSED(panX);
+        Q_UNUSED(panY);
+        // Update permanent zoom level widget
+        zoomLabel_->setText(QString("Zoom: %1x").arg(zoom, 0, 'f', 2));
     }
 
     void onCursorPositionChanged(double x, double y) {
-        // Update status bar with cursor position in world coordinates
-        statusBar()->showMessage(
+        // Update permanent cursor position widget
+        cursorPosLabel_->setText(
             QString("X: %1 | Y: %2")
                 .arg(x, 0, 'f', 3)
                 .arg(y, 0, 'f', 3)
@@ -358,6 +472,11 @@ private:
 
     // UI elements
     CADCanvas* canvas_;
+
+    // Status bar widgets (permanent indicators)
+    QLabel* cursorPosLabel_;
+    QLabel* zoomLabel_;
+    QLabel* snapModeLabel_;
 };
 
 int main(int argc, char* argv[]) {

@@ -7,6 +7,8 @@
 #include "geometry/Line2D.h"
 #include "geometry/Arc2D.h"
 #include "import/GeometryConverter.h"
+#include "ui/GridSettingsDialog.h"
+#include "ui/SelectionManager.h"
 #include <vector>
 #include <optional>
 
@@ -53,6 +55,12 @@ private:
 
 /**
  * @brief Snap manager for precise point input
+ *
+ * Implements CAD-style snapping with priority:
+ * 1. Endpoint - snap to line/arc endpoints (most precise)
+ * 2. Midpoint - snap to line/arc midpoints (construction reference)
+ * 3. Nearest - snap to nearest point on entity curve (general alignment)
+ * 4. Grid - snap to grid intersections (fallback)
  */
 class SnapManager {
 public:
@@ -64,6 +72,14 @@ public:
         Nearest = 8
     };
 
+    enum class SnapType {
+        None,
+        Grid,
+        Endpoint,
+        Midpoint,
+        Nearest
+    };
+
     SnapManager();
 
     // Snap settings
@@ -71,23 +87,45 @@ public:
     bool isSnapEnabled(SnapMode mode) const;
     void setGridSpacing(double spacing) { gridSpacing_ = spacing; }
     double gridSpacing() const { return gridSpacing_; }
+    void setSnapTolerancePixels(double pixels) { snapTolerancePixels_ = pixels; }
+    double snapTolerancePixels() const { return snapTolerancePixels_; }
 
-    // Snap calculation
+    // Snap calculation (zoom-aware)
     std::optional<Geometry::Point2D> snap(
         const Geometry::Point2D& point,
-        const std::vector<Import::GeometryEntityWithMetadata>& entities
-    ) const;
+        const std::vector<Import::GeometryEntityWithMetadata>& entities,
+        double zoomLevel
+    );
+
+    // Snap result tracking
+    std::optional<Geometry::Point2D> lastSnapPoint() const { return lastSnapPoint_; }
+    SnapType lastSnapType() const { return lastSnapType_; }
 
 private:
     Geometry::Point2D snapToGrid(const Geometry::Point2D& point) const;
     std::optional<Geometry::Point2D> snapToEndpoint(
         const Geometry::Point2D& point,
-        const std::vector<Import::GeometryEntityWithMetadata>& entities
+        const std::vector<Import::GeometryEntityWithMetadata>& entities,
+        double worldTolerance
+    ) const;
+    std::optional<Geometry::Point2D> snapToMidpoint(
+        const Geometry::Point2D& point,
+        const std::vector<Import::GeometryEntityWithMetadata>& entities,
+        double worldTolerance
+    ) const;
+    std::optional<Geometry::Point2D> snapToNearest(
+        const Geometry::Point2D& point,
+        const std::vector<Import::GeometryEntityWithMetadata>& entities,
+        double worldTolerance
     ) const;
 
     int snapModes_;
-    double gridSpacing_;
-    double snapTolerance_;
+    double gridSpacing_;              // Grid spacing (world units)
+    double snapTolerancePixels_;      // Snap detection radius (screen pixels)
+
+    // Snap result tracking
+    std::optional<Geometry::Point2D> lastSnapPoint_;
+    SnapType lastSnapType_;
 };
 
 /**
@@ -119,8 +157,10 @@ public:
     void clear();
 
     // Grid settings
+    void setGridSettings(const GridSettings& settings);
+    GridSettings gridSettings() const { return gridSettings_; }
     void setGridVisible(bool visible);
-    bool isGridVisible() const { return gridVisible_; }
+    bool isGridVisible() const { return gridSettings_.visible; }
     void setGridSpacing(double spacing);
 
     // Snap settings
@@ -153,6 +193,7 @@ private:
     void renderEntity(QPainter& painter, const Import::GeometryEntityWithMetadata& entity);
     void renderLine(QPainter& painter, const Geometry::Line2D& line, const Import::GeometryEntityWithMetadata& metadata);
     void renderArc(QPainter& painter, const Geometry::Arc2D& arc, const Import::GeometryEntityWithMetadata& metadata);
+    void renderSnapIndicator(QPainter& painter);
 
     // Data members
     std::vector<Import::GeometryEntityWithMetadata> entities_;
@@ -160,13 +201,18 @@ private:
     SnapManager snapManager_;
 
     // UI state
-    bool gridVisible_;
-    double gridSpacing_;
+    GridSettings gridSettings_;
 
     // Mouse interaction state
     bool isPanning_;
     QPoint lastMousePos_;
     Geometry::Point2D lastWorldPos_;
+
+    // Selection state
+    SelectionManager selectionManager_;
+
+    // Hit testing
+    std::string hitTest(const Geometry::Point2D& point);
 };
 
 } // namespace UI

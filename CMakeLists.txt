@@ -149,10 +149,14 @@ target_include_directories(model PUBLIC
 
 set(UI_HEADERS
     include/ui/CADCanvas.h
+    include/ui/GridSettingsDialog.h
+    include/ui/SelectionManager.h
 )
 
 set(UI_SOURCES
     src/ui/CADCanvas.cpp
+    src/ui/GridSettingsDialog.cpp
+    src/ui/SelectionManager.cpp
 )
 
 add_library(ui STATIC
@@ -220,6 +224,7 @@ add_geometry_test(test_Point2D tests/geometry/test_Point2D.cpp)
 add_geometry_test(test_Line2D tests/geometry/test_Line2D.cpp)
 add_geometry_test(test_Arc2D tests/geometry/test_Arc2D.cpp)
 add_geometry_test(test_GeometryMath tests/geometry/test_GeometryMath.cpp)
+add_geometry_test(test_Intersections tests/geometry/test_Intersections.cpp)
 
 # ============================================================================
 # INSTALLATION

@@ -4,6 +4,7 @@
 #include "Line2D.h"
 #include "Arc2D.h"
 #include <optional>
+#include <vector>
 
 namespace OwnCAD {
 namespace Geometry {
@@ -179,6 +180,22 @@ std::optional<Point2D> segmentSegmentIntersection(const Line2D& l1, const Line2D
  * @return true if segments intersect or overlap
  */
 bool segmentsIntersect(const Line2D& l1, const Line2D& l2) noexcept;
+
+/**
+ * @brief Find intersection points between a line segment and an arc
+ * @param line The line segment
+ * @param arc The arc
+ * @return Vector of intersection points (0, 1, or 2 points)
+ */
+std::vector<Point2D> intersectLineArc(const Line2D& line, const Arc2D& arc) noexcept;
+
+/**
+ * @brief Find intersection points between two arcs
+ * @param arc1 First arc
+ * @param arc2 Second arc
+ * @return Vector of intersection points (0, 1, or 2 points)
+ */
+std::vector<Point2D> intersectArcArc(const Arc2D& arc1, const Arc2D& arc2) noexcept;
 
 // ============================================================================
 // PROJECTION AND CLOSEST POINT
