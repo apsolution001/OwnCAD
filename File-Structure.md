@@ -47,6 +47,18 @@ User interface components and interaction logic.
   - Tracks selection state using std::set<std::string> (DXF handles).
   - Methods: select(), deselect(), toggle(), clear(), isSelected(), selectedCount().
 - `GridSettingsDialog.h/cpp`: Dialog for configuring grid spacing and visual settings.
+- `Tool.h`: Abstract base class for all drawing and editing tools.
+  - Defines tool interface: activate(), deactivate(), handleMouse/Key events, render().
+  - Tool state enum: Inactive, WaitingForInput, InProgress.
+  - Tool result enum: Continue, Completed, Cancelled, Ignored.
+- `ToolManager.h/cpp`: Manages drawing and editing tools.
+  - Owns and registers tool instances.
+  - Routes mouse/keyboard events to active tool.
+  - Handles tool switching and emits signals for status bar updates.
+- `LineTool.h/cpp`: Line drawing tool implementation.
+  - State machine: WaitingFirstPoint → WaitingSecondPoint → Commit.
+  - Snap-aware point input, preview rendering (dashed line).
+  - Continuous drawing mode, ESC to cancel.
 
 ### Main
 - `src/main.cpp`: Application entry point; initializes `MainWindow` and the application loop.

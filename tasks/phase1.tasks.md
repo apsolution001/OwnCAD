@@ -405,13 +405,13 @@ Each task is small enough to implement, test, and verify in one session.
 ## 3. DRAWING TOOLS
 
 ### 3.1 Line Tool
-- [ ] Create LineTool class
-- [ ] Click first point (snap-aware)
-- [ ] Move mouse → show preview line
-- [ ] Click second point → commit line
-- [ ] ESC to cancel
-- [ ] Add to DocumentModel
-- [ ] Validate: no zero-length lines
+- [x] Create LineTool class
+- [x] Click first point (snap-aware)
+- [x] Move mouse → show preview line
+- [x] Click second point → commit line
+- [x] ESC to cancel
+- [x] Add to DocumentModel
+- [x] Validate: no zero-length lines
 
 ### 3.2 Arc Tool
 - [ ] Create ArcTool class
