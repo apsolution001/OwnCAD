@@ -17,6 +17,10 @@ enum class DXFEntityType {
     Circle,
     Polyline,
     LWPolyline,
+    Ellipse,
+    Spline,
+    Point,
+    Solid,
     Unknown
 };
 
@@ -166,9 +170,138 @@ struct DXFLWPolyline {
 };
 
 /**
+ * @brief DXF ELLIPSE entity (code 0 = ELLIPSE)
+ *
+ * Represents an ellipse or elliptical arc in DXF format.
+ * Group codes:
+ * - 10,20,30: Center point (X,Y,Z)
+ * - 11,21,31: Endpoint of major axis (relative to center)
+ * - 40: Ratio of minor axis to major axis
+ * - 41: Start parameter (0 for full ellipse)
+ * - 42: End parameter (2π for full ellipse)
+ * - 8: Layer name
+ * - 62: Color number
+ */
+struct DXFEllipse {
+    double centerX;
+    double centerY;
+    double centerZ;
+    double majorAxisX;  // Endpoint of major axis relative to center
+    double majorAxisY;
+    double majorAxisZ;
+    double minorAxisRatio;  // Ratio of minor to major axis (0 < ratio <= 1)
+    double startParameter;   // Start parameter (radians)
+    double endParameter;     // End parameter (radians)
+    std::string layer;
+    std::string handle;
+    int colorNumber;
+
+    DXFEllipse()
+        : centerX(0), centerY(0), centerZ(0)
+        , majorAxisX(1), majorAxisY(0), majorAxisZ(0)
+        , minorAxisRatio(1.0)
+        , startParameter(0), endParameter(2.0 * 3.14159265358979323846)
+        , layer("0"), handle(""), colorNumber(256) {}
+};
+
+/**
+ * @brief DXF SPLINE entity (code 0 = SPLINE)
+ *
+ * Represents a B-spline curve in DXF format.
+ * For simplicity, we'll approximate splines as polylines by sampling points.
+ * Group codes:
+ * - 70: Spline flag (1=closed, 2=periodic, 4=rational, 8=planar)
+ * - 71: Degree of spline
+ * - 72: Number of knots
+ * - 73: Number of control points
+ * - 10,20,30: Control points (repeated)
+ * - 40: Knot values (repeated)
+ * - 8: Layer name
+ * - 62: Color number
+ */
+struct DXFSpline {
+    std::vector<DXFVertex> controlPoints;
+    std::vector<double> knots;
+    int degree;
+    bool closed;
+    bool periodic;
+    bool rational;
+    std::string layer;
+    std::string handle;
+    int colorNumber;
+
+    DXFSpline()
+        : degree(3), closed(false), periodic(false), rational(false)
+        , layer("0"), handle(""), colorNumber(256) {}
+};
+
+/**
+ * @brief DXF POINT entity (code 0 = POINT)
+ *
+ * Represents a single point in DXF format.
+ * Group codes:
+ * - 10,20,30: Point location (X,Y,Z)
+ * - 8: Layer name
+ * - 62: Color number
+ */
+struct DXFPoint {
+    double x;
+    double y;
+    double z;
+    std::string layer;
+    std::string handle;
+    int colorNumber;
+
+    DXFPoint()
+        : x(0), y(0), z(0)
+        , layer("0"), handle(""), colorNumber(256) {}
+};
+
+/**
+ * @brief DXF SOLID entity (code 0 = SOLID)
+ *
+ * Represents a filled triangle or quadrilateral in DXF format.
+ * Group codes:
+ * - 10,20,30: First corner (X,Y,Z)
+ * - 11,21,31: Second corner
+ * - 12,22,32: Third corner
+ * - 13,23,33: Fourth corner (optional, if omitted it's a triangle)
+ * - 8: Layer name
+ * - 62: Color number
+ */
+struct DXFSolid {
+    double x1, y1, z1;
+    double x2, y2, z2;
+    double x3, y3, z3;
+    double x4, y4, z4;
+    bool isTriangle;  // true if only 3 corners
+    std::string layer;
+    std::string handle;
+    int colorNumber;
+
+    DXFSolid()
+        : x1(0), y1(0), z1(0)
+        , x2(0), y2(0), z2(0)
+        , x3(0), y3(0), z3(0)
+        , x4(0), y4(0), z4(0)
+        , isTriangle(true)
+        , layer("0"), handle(""), colorNumber(256) {}
+};
+
+/**
  * @brief Union type for all supported DXF entities
  */
-using DXFEntityVariant = std::variant<DXFLine, DXFArc, DXFCircle, DXFPolyline, DXFLWPolyline>;
+using DXFEntityVariant = std::variant<
+    DXFLine,
+    DXFArc,
+    DXFCircle,
+    DXFPolyline,
+    DXFLWPolyline,
+    DXFEllipse,
+    DXFSpline,
+    DXFPoint,
+    DXFSolid
+>;
 
 /**
  * @brief Container for a parsed DXF entity with metadata
@@ -210,6 +343,10 @@ inline std::string toString(DXFEntityType type) {
         case DXFEntityType::Circle: return "CIRCLE";
         case DXFEntityType::Polyline: return "POLYLINE";
         case DXFEntityType::LWPolyline: return "LWPOLYLINE";
+        case DXFEntityType::Ellipse: return "ELLIPSE";
+        case DXFEntityType::Spline: return "SPLINE";
+        case DXFEntityType::Point: return "POINT";
+        case DXFEntityType::Solid: return "SOLID";
         case DXFEntityType::Unknown: return "UNKNOWN";
         default: return "INVALID";
     }

@@ -14,7 +14,7 @@ namespace Import {
  * Parses DXF (Drawing Exchange Format) files and extracts geometric entities.
  *
  * Supported DXF versions: R12, R2000, R2004, R2007, R2010, R2013
- * Supported entities: LINE, ARC, CIRCLE, LWPOLYLINE
+ * Supported entities: LINE, ARC, CIRCLE, LWPOLYLINE, ELLIPSE, SPLINE, POINT, SOLID
  *
  * Design principles:
  * - Robust: Handles malformed DXF files gracefully
@@ -125,6 +125,26 @@ private:
      * @brief Parse LWPOLYLINE entity (uses lookahead from state)
      */
     static std::optional<DXFEntity> parseLWPolyline(std::istream& input, ParserState& state);
+
+    /**
+     * @brief Parse ELLIPSE entity (uses lookahead from state)
+     */
+    static std::optional<DXFEntity> parseEllipse(std::istream& input, ParserState& state);
+
+    /**
+     * @brief Parse SPLINE entity (uses lookahead from state)
+     */
+    static std::optional<DXFEntity> parseSpline(std::istream& input, ParserState& state);
+
+    /**
+     * @brief Parse POINT entity (uses lookahead from state)
+     */
+    static std::optional<DXFEntity> parsePoint(std::istream& input, ParserState& state);
+
+    /**
+     * @brief Parse SOLID entity (uses lookahead from state)
+     */
+    static std::optional<DXFEntity> parseSolid(std::istream& input, ParserState& state);
 
     /**
      * @brief Skip unsupported entity
