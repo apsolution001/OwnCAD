@@ -1,5 +1,6 @@
 #include "geometry/GeometryMath.h"
 #include "geometry/GeometryConstants.h"
+#include "geometry/Ellipse2D.h"
 #include <cmath>
 #include <algorithm>
 
@@ -376,6 +377,33 @@ Point2D closestPointOnArc(const Point2D& point, const Arc2D& arc) noexcept {
     } else {
         return end;
     }
+}
+
+Point2D closestPointOnEllipse(const Point2D& point, const Ellipse2D& ellipse) noexcept {
+    // Sampling approach for hit testing - sufficient precision for UI purposes
+    // Sample points along the ellipse and find the closest one
+    const int numSamples = 64;  // Good balance between accuracy and performance
+
+    Point2D closestPoint = ellipse.startPoint();
+    double minDistSq = distanceSquared(point, closestPoint);
+
+    for (int i = 1; i <= numSamples; ++i) {
+        double t = static_cast<double>(i) / numSamples;
+        Point2D samplePoint = ellipse.pointAt(t);
+        double distSq = distanceSquared(point, samplePoint);
+
+        if (distSq < minDistSq) {
+            minDistSq = distSq;
+            closestPoint = samplePoint;
+        }
+    }
+
+    return closestPoint;
+}
+
+double distancePointToEllipse(const Point2D& point, const Ellipse2D& ellipse) noexcept {
+    const Point2D closest = closestPointOnEllipse(point, ellipse);
+    return distance(point, closest);
 }
 
 } // namespace GeometryMath

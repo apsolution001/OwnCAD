@@ -3,6 +3,7 @@
 #include "Point2D.h"
 #include "Line2D.h"
 #include "Arc2D.h"
+#include "Ellipse2D.h"
 #include <optional>
 #include <vector>
 
@@ -57,6 +58,17 @@ double distancePointToSegment(const Point2D& point, const Line2D& line) noexcept
  * @return Distance to nearest point on arc
  */
 double distancePointToArc(const Point2D& point, const Arc2D& arc) noexcept;
+
+/**
+ * @brief Calculate distance from point to ellipse
+ * @param point Point to measure from
+ * @param ellipse Ellipse to measure to
+ * @return Distance to nearest point on ellipse
+ *
+ * Uses sampling approach suitable for hit testing (not analytical).
+ * Samples points along the ellipse to find the closest.
+ */
+double distancePointToEllipse(const Point2D& point, const Ellipse2D& ellipse) noexcept;
 
 // ============================================================================
 // ANGLE UTILITIES
@@ -224,6 +236,16 @@ Point2D closestPointOnSegment(const Point2D& point, const Line2D& line) noexcept
  * @return Closest point on arc
  */
 Point2D closestPointOnArc(const Point2D& point, const Arc2D& arc) noexcept;
+
+/**
+ * @brief Find closest point on ellipse to given point
+ * @param point Point to find closest to
+ * @param ellipse Ellipse
+ * @return Closest point on ellipse (approximate via sampling)
+ *
+ * Uses sampling approach suitable for hit testing.
+ */
+Point2D closestPointOnEllipse(const Point2D& point, const Ellipse2D& ellipse) noexcept;
 
 } // namespace GeometryMath
 } // namespace Geometry
