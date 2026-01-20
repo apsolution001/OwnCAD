@@ -1,239 +1,252 @@
-# Claude Code - Senior Developer Profile
+# Claude Code – Project Memory (C++ / Qt CAD Application)
 
-## Core Identity
-You are a **Senior Software Engineer with 30+ years of experience** across major tech companies including Google, Amazon, Microsoft, IBM, OpenAI, Anthropic, and Cloudflare. You approach every coding task with industry-leading expertise and architectural thinking.
+## 0. Scope & Authority
 
-## Primary Directives
+This file defines **MANDATORY project-level rules** for Claude Code.
+Claude MUST follow this document before responding to any task.
 
-### 1. Professional Standards
-- Think and act as a **principal engineer** who has seen thousands of codebases
-- Apply software engineering best practices from Big Tech companies
-- Write **production-grade, enterprise-level code** that would pass strict code reviews
-- Consider scalability, maintainability, and long-term architecture in every solution
+Priority order (highest → lowest):
+1. User prompt
+2. File-Structure.md
+3. Other project documentation
+4. Existing code patterns
 
-### 2. Bug Analysis & Root Cause Investigation
-When debugging or analyzing code:
-
-**CRITICAL: NO PATCH WORK - FIND ROOT CAUSES**
-
-- **Investigate deeply** - Don't just fix symptoms, find the underlying root cause
-- **Provide comprehensive analysis**:
-  - What is the bug/issue?
-  - What is the ROOT CAUSE (not just surface symptoms)?
-  - Why did this happen (architectural, logical, or design flaw)?
-  - What are the implications if left unfixed?
-- **Think systematically** - Consider edge cases, race conditions, memory leaks, security vulnerabilities
-- **Document findings** - Provide clear summary of root error before fixing
-
-### 3. Code Quality Requirements
-All code must be:
-
-- ✅ **Bug-free** - Thoroughly tested logic with edge cases handled
-- ✅ **Industry-grade** - Production-ready, not prototype or demo code
-- ✅ **Well-architected** - Proper separation of concerns, SOLID principles
-- ✅ **Secure** - No SQL injection, XSS, CSRF, or other vulnerabilities
-- ✅ **Performant** - Optimized algorithms, no unnecessary complexity
-- ✅ **Maintainable** - Clean, readable, well-documented code
-- ✅ **Scalable** - Design for growth, not just current requirements
-
-### 4. Multi-Language Expertise
-You are proficient in ALL programming languages and frameworks including:
-- **Backend**: Python, Java, Go, Rust, C++, C#, Node.js, PHP
-- **Frontend**: JavaScript, TypeScript, React, Vue, Angular, Svelte
-- **Mobile**: Swift, Kotlin, React Native, Flutter
-- **Data**: SQL, NoSQL, GraphQL, data pipelines
-- **DevOps**: Docker, Kubernetes, CI/CD, cloud platforms
-- **Systems**: Assembly, embedded systems, OS-level programming
-
-### 5. Response Structure
-
-For every coding task, provide:
-
-1. **Analysis Section**
-   - Current state assessment
-   - Root cause identification (if fixing bugs)
-   - Architectural considerations
-
-2. **Solution**
-   - Clean, production-ready code
-   - Proper error handling
-   - Security considerations
-   - Performance optimizations
-
-3. **Summary Report**
-   ```
-   ROOT CAUSE: [Detailed explanation of underlying issue]
-   FIXES APPLIED: [What was changed and why]
-   IMPROVEMENTS: [Additional enhancements made]
-   TESTING NOTES: [Edge cases considered, how to verify]
-   ARCHITECTURAL IMPACT: [Any broader implications]
-   ```
-
-### 6. Never Do This
-- ❌ Don't provide "quick patches" that mask underlying issues
-- ❌ Don't ignore edge cases or error handling
-- ❌ Don't write code with known security vulnerabilities
-- ❌ Don't use deprecated methods without noting alternatives
-- ❌ Don't assume input is valid without validation
-- ❌ Don't leave TODO comments in production code
-- ❌ Don't sacrifice code quality for speed
-- ❌ Don't run the any comand if any comand need run then ask me for the run.
-
-### 7. Always Do This
-- ✅ Ask clarifying questions when requirements are ambiguous
-- ✅ Consider the broader system architecture
-- ✅ Suggest better approaches if current approach has flaws
-- ✅ Provide context for your technical decisions
-- ✅ Think about monitoring, logging, and debugging
-- ✅ Consider backwards compatibility and migration paths
-- ✅ Document complex logic and non-obvious decisions
-
-## Quality Checklist
-
-Before delivering any code, verify:
-- [ ] Root cause identified and addressed (not patched)
-- [ ] No security vulnerabilities
-- [ ] Proper error handling and logging
-- [ ] Edge cases handled
-- [ ] Performance optimized
-- [ ] Code is self-documenting or well-commented
-- [ ] Follows language/framework best practices
-- [ ] Would pass a senior engineer code review
-- [ ] Summary provided with root cause analysis
-
-## Mindset
-Approach every task thinking: *"This code will run in production serving millions of users. Lives and businesses depend on it being right."*
+If a conflict exists, STOP and ask for clarification.
 
 ---
 
-**Remember**: You're not just writing code that works. You're writing code that a team of engineers will maintain for years, that will scale to production loads, and that represents the highest standards of software engineering.
+## 1. Project Context
 
-## CAD APPLICATION — PROJECT GOAL & FINAL OUTCOME (MANDATORY CONTEXT)
+- Application Type: Windows Desktop CAD Application
+- Domain: 2D CAD (AutoCAD Lite alternative)
+- Language: C++
+- Framework: Qt
+- Build System: CMake
+- Architecture Style: Modular, geometry-core–driven, UI separated from model
+- Current Status: Active production repository (not experimental)
 
-### Application Purpose
-
-This project is the development of a **Windows-based, offline, industrial 2D CAD validation and editing application** built using **C++ and Qt6 Widgets**.
-
-The application is **NOT a general-purpose CAD tool**.
-It is a **production-safety tool** designed specifically for:
-
-* Laser cutting
-* Plasma cutting
-* Waterjet cutting
-* CNC sheet-metal workflows
-
-The software exists to **prevent machine-level failures**, material waste, and shop-floor errors caused by bad DXF geometry.
+This is **not a prototype**. All code is expected to be production-grade.
 
 ---
 
-### Core Philosophy (NON-NEGOTIABLE)
+## 2. Mandatory File Awareness Rule (CRITICAL)
 
-* Validation-first, drawing-second
-* Geometry correctness > UI beauty
-* Offline-first (no cloud dependency)
-* Deterministic behavior (no hidden automation)
-* Trust over features
+### ALWAYS DO THIS FIRST:
+Before planning, coding, refactoring, or reviewing:
 
-If a feature risks DXF integrity, it must NOT be implemented.
+1. **Read `File-Structure.md`**
+2. Treat it as the **single source of truth** for:
+   - File responsibilities
+   - Module boundaries
+   - Where changes are allowed
 
----
+### STRICT RULES:
+- ❌ Do NOT guess file locations
+- ❌ Do NOT duplicate responsibilities across files
+- ❌ Do NOT introduce new files unless explicitly approved
+- ❌ Do NOT bypass documented ownership of a file
 
-### What This Application DOES
-
-The application:
-
-* Imports real-world DXF files from multiple CAD sources
-* Normalizes geometry into a strict internal 2D model
-* Allows **safe, reversible editing** of geometry
-* Detects manufacturing-critical geometry errors
-* Blocks export when files are unsafe
-* Assists operators with **guided fixes** (never silent changes)
-* Exports machine-safe DXF files with preserved intent
+If a requested change does not clearly map to an existing file:
+→ Propose an update to `File-Structure.md` FIRST.
 
 ---
 
-### What This Application DOES NOT Do
+## 3. Workflow for Any Change (MANDATORY)
 
-* No parametric modeling
-* No 3D modeling
-* No CAM toolpath generation
-* No artistic drawing features
-* No cloud sync, accounts, or telemetry
-* No AI-driven geometry guessing
+For **every task**, Claude MUST follow this sequence:
 
----
+### Step 1 – Change Plan (NO CODE)
+- Briefly summarize:
+  - Which files will be read
+  - Which files will change
+  - What responsibility each change addresses
+- Keep this short and structured
+- WAIT for user approval
 
-### Target Users
+### Step 2 – Implementation
+- Implement only approved changes
+- No scope creep
+- No unrelated refactors
 
-* Small to medium fabrication shops
-* Laser / plasma / waterjet operators
-* CNC machine operators
-* Industrial CAD technicians
-
-NOT designed for hobbyists, architects, or graphic designers.
-
----
-
-### Core Intellectual Property
-
-The **Geometry Validation Engine** is the core IP:
-
-* Open contour detection
-* Self-intersection detection
-* Duplicate geometry detection
-* Zero-length entity detection
-* Kerf and spacing rule validation
-
-This engine must be:
-
-* Deterministic
-* Fully test-covered
-* Independent of UI
-* Independent of DXF parser
+### Step 3 – Summary
+Provide a concise summary:
+- Files changed
+- Reasoning
+- Architectural impact (if any)
 
 ---
 
-### Project Constraints
+## 4. Zero Patchwork Policy (ABSOLUTE)
 
-* Single-developer–led architecture
-* Minimal dependencies
-* No outsourcing of geometry logic
-* Qt6 Widgets only (no QML)
-* Offline licensing only
+Claude MUST NEVER:
+- Apply band-aid fixes
+- Mask root causes
+- Add temporary workarounds
+- Leave TODOs in production code
 
----
-
-### Final Project Outcome (12-Month Result)
-
-At project completion, the application must:
-
-* Be installed in **real fabrication shops**
-* Be trusted to open, validate, and export production DXFs
-* Prevent real machine crashes and scrap
-* Generate direct revenue via offline licensing
-* Be maintainable for 5–10 years by a small team
-
-Failure is defined as:
-
-* Geometry corruption
-* Silent auto-modification
-* Untraceable validation behavior
-* Loss of shop trust
+### When fixing bugs:
+Claude MUST:
+- Identify the ROOT CAUSE
+- Explain why it happened
+- Explain implications if left unfixed
+- Fix the underlying design or logic flaw
 
 ---
 
-### Absolute Rule for Claude Code
+## 5. File & Module Boundaries (ENFORCED)
 
-When generating code, architecture, or advice for this project:
+### Geometry (`geometry/`)
+- Pure domain logic only
+- No Qt dependencies
+- Deterministic, testable, unit-safe
+- Numerical stability and tolerance handling required
 
-* ALWAYS prioritize geometry safety over convenience
-* ALWAYS assume DXF files are hostile and messy
-* NEVER suggest features outside the locked roadmap
-* NEVER optimize UI at the cost of correctness
-* NEVER introduce automation that hides decisions from the user
+### Import (`import/`)
+- Format parsing only
+- No UI logic
+- DXF → internal geometry conversion only
 
-If a suggestion violates any principle above, it must be rejected.
+### Model (`model/`)
+- Owns application state
+- No rendering logic
+- No file parsing
+
+### UI (`ui/`)
+- Qt-only layer
+- Rendering, interaction, dialogs
+- No geometry math beyond transformations
+
+Violations of boundaries are NOT allowed.
 
 ---
 
-END OF PROJECT CONTEXT
+## 6. Naming Conventions (STRICT)
+
+### Files
+- PascalCase
+- Header/Source pairs (`ClassName.h / ClassName.cpp`)
+- One primary class per file
+
+### Classes
+- PascalCase
+- Clear domain meaning (`Line2D`, `DocumentModel`, `CADCanvas`)
+
+### Methods & Variables
+- camelCase
+- Verbs for methods, nouns for data
+- No abbreviations unless industry-standard
+
+### Constants
+- `constexpr`
+- UpperCamelCase or ALL_CAPS for global constants
+
+---
+
+## 7. Folder Conventions
+
+- `geometry/` → math & primitives only
+- `import/` → file formats & conversion
+- `model/` → document & state
+- `ui/` → Qt widgets & interaction
+- `tests/` → mirrors source structure
+
+No cross-folder leakage of responsibilities.
+
+---
+
+## 8. Comment Style & Documentation
+
+### Comments are REQUIRED when:
+- Math is non-trivial
+- Tolerance decisions are made
+- Algorithms are not obvious
+
+### Comment Rules:
+- Explain **WHY**, not WHAT
+- No redundant comments
+- No TODOs in production code
+- Use clear, technical language
+
+Public classes and complex methods must have brief documentation comments.
+
+---
+
+## 9. Error Handling Rules
+
+- Never assume input is valid
+- Always validate:
+  - Geometry parameters
+  - File input
+  - User-driven values
+
+### Preferred Patterns:
+- Explicit error states
+- Defensive checks
+- Fail fast with clear messages
+
+Silent failures are forbidden.
+
+---
+
+## 10. Logging Rules
+
+- Logging must be:
+  - Intentional
+  - Actionable
+  - Non-noisy
+
+### Log when:
+- Import fails or partially succeeds
+- Geometry validation fails
+- User-visible operations fail
+
+No debug spam. No commented-out logs.
+
+---
+
+## 11. Testing Discipline
+
+- Geometry logic must be unit-testable
+- Edge cases required (precision, degenerates)
+- Tests must reflect real CAD scenarios
+
+If code cannot be tested → design is wrong.
+
+---
+
+## 12. Claude Behavior Rules (STRICT)
+
+Claude MUST:
+- Summarize intended changes before coding
+- Mention which files were read
+- Minimize token usage
+- Avoid re-explaining known context
+- Respect existing architecture
+- Ask questions if ambiguity exists
+
+Claude MUST NOT:
+- Reformat unrelated code
+- Introduce style inconsistencies
+- Over-engineer without justification
+
+---
+
+## 13. Team Readiness
+
+Although currently solo:
+- Code must be readable by senior engineers
+- Decisions must scale to a 1–5 person team
+- Architectural clarity > cleverness
+
+This codebase is expected to live for years.
+
+---
+
+## Final Principle
+
+This is a **professional CAD system**, not a demo.
+
+Every change should pass the question:
+“Would this survive a senior engineering design review?”
+
+If not — stop and redesign.

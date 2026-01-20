@@ -283,51 +283,122 @@ Each task is small enough to implement, test, and verify in one session.
 
 **Deliverable**: ✅ Production-grade geometry primitives with comprehensive validation, tolerance-aware equality, and manufacturing safety features.
 
+### Shape Support Status (Updated 2026-01-16)
+
+**Fully Implemented & Rendering:**
+- [x] Line – Straight line between two points (Line2D)
+- [x] Polyline – Connected lines and arcs treated as one object (decomposed to Line2D/Arc2D)
+- [x] Circle – Perfect round shape (stored as Arc2D with 360° sweep)
+- [x] Arc – Part of a circle (Arc2D)
+- [x] Ellipse – Oval shape (Ellipse2D)
+- [x] Spline – Smooth free-form curve (approximated as Line2D segments)
+- [x] Point – Single point marker (Point2D)
+- [x] Solid – Filled triangle/quad (outline as Line2D segments)
+
+**Not Separate DXF Entities (handled via Polyline):**
+- Rectangle – Four-sided shape (imported as LWPOLYLINE → 4 Line2D)
+- Polygon – Regular shapes (imported as LWPOLYLINE → N Line2D)
+
+**Not Yet Implemented (Complex entities):**
+- [ ] Hatch – Filled area with patterns or solid fill
+- [ ] Region – Closed area converted into a single surface
+- [ ] Donut – Ring-shaped object (typically HATCH in DXF)
+
 ### 1.2 Geometry Math Utilities ✅
-- [ ] Distance point–point
-- [ ] Distance point–line
-- [ ] Distance point–arc
-- [ ] Angle normalization
-- [ ] Arc length validation
-- [ ] Intersection calculations
+- [x] Distance point–point (GeometryMath.cpp:14-16, 18-20)
+- [x] Distance point–line (GeometryMath.cpp:22-38, 40-43)
+- [x] Distance point–arc (GeometryMath.cpp:45-48)
+- [x] Angle normalization (GeometryMath.cpp:54-77)
+- [x] Arc length validation (GeometryMath.cpp:103-131)
+- [x] Intersection calculations (GeometryMath.cpp:153-317)
 
 ### 1.3 Geometry Safety Checks ✅
-- [ ] Zero-length line detection
-- [ ] Zero-radius arc detection
-- [ ] Invalid arc angle detection
+- [x] Zero-length line detection (Line2D::create() with MIN_LINE_LENGTH check)
+- [x] Zero-radius arc detection (Arc2D::create() with MIN_ARC_RADIUS check)
+- [x] Invalid arc angle detection (Arc2D::create() with MIN_ARC_SWEEP check)
 
 ---
 
 ## 2. SELECTION SYSTEM
 
-### 2.1 Basic Selection
-- [ ] Create SelectionManager class
-- [ ] Single click select (hit test within tolerance)
-- [ ] Clear selection on empty click
-- [ ] Selection highlight rendering (blue color)
-- [ ] Track selected entities (IDs or indices)
+### 2.1 Basic Selection ✅
+**STATUS: COMPLETE**
 
-### 2.2 Multi-Selection
-- [ ] Shift + click toggle selection
-- [ ] Ctrl + click add to selection
-- [ ] Selection list management (add/remove/clear)
-- [ ] Highlight all selected entities
+- [x] Create SelectionManager class
+  - SelectionManager.h/cpp implemented (include/ui/, src/ui/)
+  - Maintains std::set<std::string> of selected entity handles
+  - Methods: select(), deselect(), toggle(), clear(), isSelected(), selectedCount(), selectedHandles(), isEmpty()
+- [x] Single click select (hit test within tolerance)
+  - hitTest() implemented in CADCanvas (CADCanvas.cpp:831-862)
+  - Screen-space tolerance: 10 pixels (zoom-independent)
+  - Supports all entity types: Line2D, Arc2D, Ellipse2D, Point2D
+  - Prioritizes closest entity within tolerance
+- [x] Clear selection on empty click
+  - Implemented in CADCanvas::mousePressEvent() (CADCanvas.cpp:735-747)
+  - Clear + select pattern: always clears before selecting new
+- [x] Selection highlight rendering (blue color)
+  - Blue color #0066FF applied in renderLine/Arc/Ellipse/Point()
+  - Selected entities rendered with width 3 (vs normal 2)
+- [x] Track selected entities (IDs or indices)
+  - Uses DXF handles (std::string) for stable identification
+  - std::set<std::string> ensures uniqueness and O(log n) operations
+- [x] Selection count in status bar
+  - selectionChanged signal emitted on selection change
+  - Status bar shows "Selected: N" indicator (main.cpp:154-159, 398-401)
 
-### 2.3 Box Selection
-- [ ] Left-drag box selection (inside only mode)
-- [ ] Right-drag box selection (crossing mode)
-- [ ] Draw selection rectangle while dragging
-- [ ] Bounding box intersection logic
-- [ ] Inside mode: entity fully inside box
-- [ ] Crossing mode: entity touches or crosses box
+**Deliverable**: ✅ Robust, predictable single-click selection system
 
-### 2.4 Selection Visuals
-- [ ] Blue highlight for selected entities (#0066FF)
-- [ ] Draw bounding box around selection
-- [ ] Grip points at corners (small squares)
-- [ ] Selection count in status bar
+### 2.2 Multi-Selection ✅
+**STATUS: COMPLETE**
 
-**Deliverable**: Robust, predictable selection system
+- [x] Shift + click toggle selection (CADCanvas.cpp:739-743)
+- [x] Ctrl + click add to selection (CADCanvas.cpp:744-748)
+- [x] Selection list management (add/remove/clear)
+  - SelectionManager class (SelectionManager.h/cpp)
+  - Methods: select(), deselect(), toggle(), clear(), selectedHandles()
+- [x] Highlight all selected entities
+  - Blue #0066FF highlight in renderLine/Arc/Ellipse/Point()
+  - Selected entities rendered with width 3 (vs normal 2)
+
+**Deliverable**: ✅ Complete multi-selection with Shift (toggle) and Ctrl (add) modifiers
+
+### 2.3 Box Selection ✅
+**STATUS: COMPLETE**
+
+- [x] Left-drag box selection (inside only mode)
+  - Left-click on empty space starts Inside mode (CADCanvas.cpp:756-765)
+  - Solid blue rectangle visual feedback
+- [x] Right-drag box selection (crossing mode)
+  - Right-click on empty space starts Crossing mode (CADCanvas.cpp:769-782)
+  - Dashed green rectangle visual feedback
+- [x] Draw selection rectangle while dragging
+  - renderSelectionBox() method (CADCanvas.cpp:954-980)
+  - Semi-transparent fill with colored border
+- [x] Bounding box intersection logic
+  - Uses BoundingBox::containsBox() for Inside mode
+  - Uses BoundingBox::intersects() for Crossing mode
+- [x] Inside mode: entity fully inside box
+  - getEntitiesInBox() with BoxSelectMode::Inside (CADCanvas.cpp:1009-1011)
+- [x] Crossing mode: entity touches or crosses box
+  - getEntitiesInBox() with BoxSelectMode::Crossing (CADCanvas.cpp:1012-1014)
+
+**Deliverable**: ✅ Complete box selection with CAD-standard inside/crossing modes
+
+### 2.4 Selection Visuals ✅
+**STATUS: COMPLETE**
+
+- [x] Blue highlight for selected entities (#0066FF)
+  - Already implemented in 2.1 (renderLine/Arc/Ellipse/Point methods)
+- [x] Draw bounding box around selection
+  - renderSelectionBoundingBox() method (CADCanvas.cpp:729-785)
+  - Dashed blue rectangle (#0066FF) around merged bounding box of selected entities
+- [x] Grip points at corners (small squares)
+  - renderGripPoints() method (CADCanvas.cpp:787-850)
+  - 6x6 pixel filled blue squares at 4 corners of selection bounding box
+- [x] Selection count in status bar
+  - Already implemented in 2.1 (selectionChanged signal + status bar indicator)
+
+**Deliverable**: ✅ Complete selection visual feedback with bounding box and grip points
 
 ---
 
