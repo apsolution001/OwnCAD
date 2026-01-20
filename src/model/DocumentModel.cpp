@@ -205,13 +205,14 @@ std::string DocumentModel::addLine(const Line2D& line, const std::string& layer)
     // Generate handle
     std::string handle = generateHandle();
 
-    // Create entity with metadata
-    GeometryEntityWithMetadata entityWithMeta;
-    entityWithMeta.entity = line;
-    entityWithMeta.layer = layer;
-    entityWithMeta.handle = handle;
-    entityWithMeta.colorNumber = 256;  // BYLAYER
-    entityWithMeta.sourceLineNumber = 0;  // Not from file
+    // Create entity with metadata (aggregate initialization)
+    GeometryEntityWithMetadata entityWithMeta{
+        line,           // entity
+        layer,          // layer
+        handle,         // handle
+        256,            // colorNumber (BYLAYER)
+        0               // sourceLineNumber (not from file)
+    };
 
     // Add to collection
     entities_.push_back(entityWithMeta);
@@ -233,13 +234,14 @@ std::string DocumentModel::addArc(const Arc2D& arc, const std::string& layer) {
     // Generate handle
     std::string handle = generateHandle();
 
-    // Create entity with metadata
-    GeometryEntityWithMetadata entityWithMeta;
-    entityWithMeta.entity = arc;
-    entityWithMeta.layer = layer;
-    entityWithMeta.handle = handle;
-    entityWithMeta.colorNumber = 256;  // BYLAYER
-    entityWithMeta.sourceLineNumber = 0;  // Not from file
+    // Create entity with metadata (aggregate initialization)
+    GeometryEntityWithMetadata entityWithMeta{
+        arc,            // entity
+        layer,          // layer
+        handle,         // handle
+        256,            // colorNumber (BYLAYER)
+        0               // sourceLineNumber (not from file)
+    };
 
     // Add to collection
     entities_.push_back(entityWithMeta);

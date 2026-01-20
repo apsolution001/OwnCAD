@@ -55,7 +55,7 @@ enum class ToolResult {
  *
  * Lifecycle:
  * 1. activate() called when tool becomes active
- * 2. handleMouse*/Key* events called during operation
+ * 2. handleMouse/Key events called during operation
  * 3. render() called each frame for preview
  * 4. deactivate() called when switching to another tool
  */

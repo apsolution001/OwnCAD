@@ -156,6 +156,8 @@ set(UI_HEADERS
     include/ui/Tool.h
     include/ui/ToolManager.h
     include/ui/LineTool.h
+    include/ui/ArcTool.h
+    include/ui/RectangleTool.h
 )
 
 set(UI_SOURCES
@@ -164,6 +166,8 @@ set(UI_SOURCES
     src/ui/SelectionManager.cpp
     src/ui/ToolManager.cpp
     src/ui/LineTool.cpp
+    src/ui/ArcTool.cpp
+    src/ui/RectangleTool.cpp
 )
 
 add_library(ui STATIC

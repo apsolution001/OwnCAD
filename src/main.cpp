@@ -520,11 +520,15 @@ private slots:
     }
 
     void onArcTool() {
-        statusBar()->showMessage("Arc Tool - To be implemented", 3000);
+        ToolManager* toolMgr = canvas_->toolManager();
+        toolMgr->activateTool("arc");
+        canvas_->setCursor(Qt::CrossCursor);
     }
 
     void onRectangleTool() {
-        statusBar()->showMessage("Rectangle Tool - To be implemented", 3000);
+        ToolManager* toolMgr = canvas_->toolManager();
+        toolMgr->activateTool("rectangle");
+        canvas_->setCursor(Qt::CrossCursor);
     }
 
     void onSelectTool() {
