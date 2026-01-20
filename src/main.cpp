@@ -53,7 +53,8 @@ public:
         , canvas_(nullptr)
         , cursorPosLabel_(nullptr)
         , zoomLabel_(nullptr)
-        , snapModeLabel_(nullptr) {
+        , snapModeLabel_(nullptr)
+        , selectionLabel_(nullptr) {
 
         setWindowTitle("OwnCAD - Industrial 2D CAD Validator v0.1.0");
         setMinimumSize(1024, 768);
@@ -80,6 +81,8 @@ private:
                 this, &MainWindow::onViewportChanged);
         connect(canvas_, &CADCanvas::cursorPositionChanged,
                 this, &MainWindow::onCursorPositionChanged);
+        connect(canvas_, &CADCanvas::selectionChanged,
+                this, &MainWindow::onSelectionChanged);
 
         // Enable grid and snap by default
         canvas_->setGridVisible(true);
@@ -148,6 +151,13 @@ private:
         snapModeLabel_->setFrameStyle(QFrame::Panel | QFrame::Sunken);
         statusBar()->addPermanentWidget(snapModeLabel_);
 
+        // Selection count indicator
+        selectionLabel_ = new QLabel("Selected: 0");
+        selectionLabel_->setMinimumWidth(100);
+        selectionLabel_->setAlignment(Qt::AlignCenter);
+        selectionLabel_->setFrameStyle(QFrame::Panel | QFrame::Sunken);
+        statusBar()->addPermanentWidget(selectionLabel_);
+
         // Zoom level indicator
         zoomLabel_ = new QLabel("Zoom: 1.00x");
         zoomLabel_->setMinimumWidth(100);
@@ -163,7 +173,7 @@ private:
         statusBar()->addPermanentWidget(cursorPosLabel_);
 
         // Set initial message in temporary area (left side)
-        statusBar()->showMessage("Ready - Pan: Middle Mouse | Zoom: Mouse Wheel");
+        statusBar()->showMessage("Ready - Pan: Middle Mouse | Zoom: Mouse Wheel | Click: Select");
     }
 
     void runGeometrySelfTest() {
@@ -385,6 +395,11 @@ private slots:
         );
     }
 
+    void onSelectionChanged(size_t count) {
+        // Update permanent selection count widget
+        selectionLabel_->setText(QString("Selected: %1").arg(count));
+    }
+
     void showValidationResults() {
         const auto& result = document_->validationResult();
         const auto& stats = document_->statistics();
@@ -477,6 +492,7 @@ private:
     QLabel* cursorPosLabel_;
     QLabel* zoomLabel_;
     QLabel* snapModeLabel_;
+    QLabel* selectionLabel_;
 };
 
 int main(int argc, char* argv[]) {

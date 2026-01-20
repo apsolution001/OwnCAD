@@ -110,7 +110,14 @@ std::vector<std::variant<Line2D, Arc2D>> DocumentModel::getEntityVariants() cons
     variants.reserve(entities_.size());
 
     for (const auto& entityWithMeta : entities_) {
-        variants.push_back(entityWithMeta.entity);
+        // Only extract Line2D and Arc2D for validation
+        // (GeometryValidator currently only supports these types)
+        if (std::holds_alternative<Line2D>(entityWithMeta.entity)) {
+            variants.push_back(std::get<Line2D>(entityWithMeta.entity));
+        } else if (std::holds_alternative<Arc2D>(entityWithMeta.entity)) {
+            variants.push_back(std::get<Arc2D>(entityWithMeta.entity));
+        }
+        // Skip Ellipse2D and Point2D for now (no validator yet)
     }
 
     return variants;
@@ -138,6 +145,12 @@ void DocumentModel::calculateStatistics() {
             }
             else if constexpr (std::is_same_v<T, Arc2D>) {
                 statistics_.totalArcs++;
+            }
+            else if constexpr (std::is_same_v<T, Ellipse2D>) {
+                // Ellipse - counted in totalSegments
+            }
+            else if constexpr (std::is_same_v<T, Point2D>) {
+                // Point - counted in totalSegments
             }
         }, entityWithMeta.entity);
     }
@@ -177,6 +190,73 @@ std::vector<std::string> DocumentModel::getLayers() const {
     }
 
     return std::vector<std::string>(layerSet.begin(), layerSet.end());
+}
+
+// ============================================================================
+// ENTITY CREATION
+// ============================================================================
+
+std::string DocumentModel::addLine(const Line2D& line, const std::string& layer) {
+    // Validate input
+    if (!line.isValid()) {
+        return std::string();
+    }
+
+    // Generate handle
+    std::string handle = generateHandle();
+
+    // Create entity with metadata
+    GeometryEntityWithMetadata entityWithMeta;
+    entityWithMeta.entity = line;
+    entityWithMeta.layer = layer;
+    entityWithMeta.handle = handle;
+    entityWithMeta.colorNumber = 256;  // BYLAYER
+    entityWithMeta.sourceLineNumber = 0;  // Not from file
+
+    // Add to collection
+    entities_.push_back(entityWithMeta);
+
+    // Update statistics
+    statistics_.totalLines++;
+    statistics_.totalSegments++;
+    statistics_.validEntities++;
+
+    return handle;
+}
+
+std::string DocumentModel::addArc(const Arc2D& arc, const std::string& layer) {
+    // Validate input
+    if (!arc.isValid()) {
+        return std::string();
+    }
+
+    // Generate handle
+    std::string handle = generateHandle();
+
+    // Create entity with metadata
+    GeometryEntityWithMetadata entityWithMeta;
+    entityWithMeta.entity = arc;
+    entityWithMeta.layer = layer;
+    entityWithMeta.handle = handle;
+    entityWithMeta.colorNumber = 256;  // BYLAYER
+    entityWithMeta.sourceLineNumber = 0;  // Not from file
+
+    // Add to collection
+    entities_.push_back(entityWithMeta);
+
+    // Update statistics
+    statistics_.totalArcs++;
+    statistics_.totalSegments++;
+    statistics_.validEntities++;
+
+    return handle;
+}
+
+std::string DocumentModel::generateHandle() {
+    // Generate handle in format "E00001", "E00002", etc.
+    char buffer[16];
+    std::snprintf(buffer, sizeof(buffer), "E%05zu", nextHandleNumber_++);
+    return std::string(buffer);
 }
 
 } // namespace Model

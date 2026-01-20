@@ -56,6 +56,7 @@ set(GEOMETRY_HEADERS
     include/geometry/Point2D.h
     include/geometry/Line2D.h
     include/geometry/Arc2D.h
+    include/geometry/Ellipse2D.h
     include/geometry/BoundingBox.h
     include/geometry/GeometryMath.h
     include/geometry/GeometryValidator.h
@@ -66,6 +67,7 @@ set(GEOMETRY_SOURCES
     src/geometry/Point2D.cpp
     src/geometry/Line2D.cpp
     src/geometry/Arc2D.cpp
+    src/geometry/Ellipse2D.cpp
     src/geometry/BoundingBox.cpp
     src/geometry/GeometryMath.cpp
     src/geometry/GeometryValidator.cpp
