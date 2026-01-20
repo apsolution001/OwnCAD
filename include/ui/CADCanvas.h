@@ -6,6 +6,7 @@
 #include "geometry/Point2D.h"
 #include "geometry/Line2D.h"
 #include "geometry/Arc2D.h"
+#include "geometry/BoundingBox.h"
 #include "import/GeometryConverter.h"
 #include "ui/GridSettingsDialog.h"
 #include "ui/SelectionManager.h"
@@ -129,6 +130,18 @@ private:
 };
 
 /**
+ * @brief Box selection mode
+ *
+ * Inside: Entity must be fully inside selection box (left-to-right drag)
+ * Crossing: Entity can touch or cross selection box (right-to-left drag)
+ */
+enum class BoxSelectMode {
+    None,
+    Inside,   // Entity fully inside box (solid rectangle)
+    Crossing  // Entity touches or crosses box (dashed rectangle)
+};
+
+/**
  * @brief Main CAD canvas widget for geometry rendering and interaction
  *
  * Features:
@@ -138,6 +151,7 @@ private:
  * - Grid rendering with adaptive spacing
  * - Snap system (grid, endpoint, midpoint)
  * - Selection feedback
+ * - Box selection (inside and crossing modes)
  *
  * Design principles:
  * - Viewport transformation separates world/screen coordinates
@@ -175,6 +189,7 @@ public:
 signals:
     void viewportChanged(double zoom, double panX, double panY);
     void cursorPositionChanged(double x, double y);
+    void selectionChanged(size_t selectedCount);
 
 protected:
     // Qt event handlers
@@ -193,7 +208,11 @@ private:
     void renderEntity(QPainter& painter, const Import::GeometryEntityWithMetadata& entity);
     void renderLine(QPainter& painter, const Geometry::Line2D& line, const Import::GeometryEntityWithMetadata& metadata);
     void renderArc(QPainter& painter, const Geometry::Arc2D& arc, const Import::GeometryEntityWithMetadata& metadata);
+    void renderEllipse(QPainter& painter, const Geometry::Ellipse2D& ellipse, const Import::GeometryEntityWithMetadata& metadata);
+    void renderPoint(QPainter& painter, const Geometry::Point2D& point, const Import::GeometryEntityWithMetadata& metadata);
     void renderSnapIndicator(QPainter& painter);
+    void renderSelectionBoundingBox(QPainter& painter);
+    void renderGripPoints(QPainter& painter);
 
     // Data members
     std::vector<Import::GeometryEntityWithMetadata> entities_;
@@ -211,8 +230,17 @@ private:
     // Selection state
     SelectionManager selectionManager_;
 
+    // Box selection state
+    BoxSelectMode boxSelectMode_;
+    QPointF boxSelectStartScreen_;  // Start point in screen coordinates
+    QPointF boxSelectCurrentScreen_;  // Current point in screen coordinates
+
     // Hit testing
     std::string hitTest(const Geometry::Point2D& point);
+
+    // Box selection helpers
+    void renderSelectionBox(QPainter& painter);
+    std::vector<std::string> getEntitiesInBox(const Geometry::BoundingBox& selectionBox, BoxSelectMode mode);
 };
 
 } // namespace UI

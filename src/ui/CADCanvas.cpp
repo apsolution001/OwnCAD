@@ -290,7 +290,10 @@ CADCanvas::CADCanvas(QWidget* parent)
     , isPanning_(false)
     , lastMousePos_()
     , lastWorldPos_(0, 0)
-    , selectionManager_() {
+    , selectionManager_()
+    , boxSelectMode_(BoxSelectMode::None)
+    , boxSelectStartScreen_()
+    , boxSelectCurrentScreen_() {
 
     setMouseTracking(true);  // Enable mouse move events without button press
     setFocusPolicy(Qt::StrongFocus);
@@ -316,16 +319,23 @@ void CADCanvas::setEntities(const std::vector<Import::GeometryEntityWithMetadata
     // Count entity types for logging
     int lineCount = 0;
     int arcCount = 0;
+    int ellipseCount = 0;
+    int pointCount = 0;
     for (const auto& e : entities_) {
         if (std::holds_alternative<Geometry::Line2D>(e.entity)) {
             lineCount++;
         } else if (std::holds_alternative<Geometry::Arc2D>(e.entity)) {
             arcCount++;
+        } else if (std::holds_alternative<Geometry::Ellipse2D>(e.entity)) {
+            ellipseCount++;
+        } else if (std::holds_alternative<Geometry::Point2D>(e.entity)) {
+            pointCount++;
         }
     }
 
-    qDebug() << "CADCanvas: Loaded" << entities_.size() << "segments ("
-             << lineCount << "lines," << arcCount << "arcs)";
+    qDebug() << "CADCanvas: Loaded" << entities_.size() << "entities ("
+             << lineCount << "lines," << arcCount << "arcs,"
+             << ellipseCount << "ellipses," << pointCount << "points)";
 
     update();  // Trigger repaint
 }
@@ -383,6 +393,14 @@ void CADCanvas::zoomExtents() {
             bbox = std::get<Geometry::Line2D>(entity).boundingBox();
         } else if (std::holds_alternative<Geometry::Arc2D>(entity)) {
             bbox = std::get<Geometry::Arc2D>(entity).boundingBox();
+        } else if (std::holds_alternative<Geometry::Ellipse2D>(entity)) {
+            bbox = std::get<Geometry::Ellipse2D>(entity).boundingBox();
+        } else if (std::holds_alternative<Geometry::Point2D>(entity)) {
+            // Point has no area, create tiny bbox around it
+            const auto& pt = std::get<Geometry::Point2D>(entity);
+            bbox = Geometry::BoundingBox::fromPoints(pt, pt);
+        } else {
+            continue;  // Skip unknown types
         }
 
         if (totalBBox) {
@@ -442,6 +460,11 @@ void CADCanvas::paintEvent(QPaintEvent* event) {
 
     // Render all entities
     renderEntities(painter);
+
+    // Render box selection rectangle (if in box select mode)
+    if (boxSelectMode_ != BoxSelectMode::None) {
+        renderSelectionBox(painter);
+    }
 
     // Render snap indicator (foreground, always on top)
     renderSnapIndicator(painter);
@@ -530,6 +553,10 @@ void CADCanvas::renderEntity(QPainter& painter, const Import::GeometryEntityWith
         renderLine(painter, std::get<Geometry::Line2D>(entity), entityWithMeta);
     } else if (std::holds_alternative<Geometry::Arc2D>(entity)) {
         renderArc(painter, std::get<Geometry::Arc2D>(entity), entityWithMeta);
+    } else if (std::holds_alternative<Geometry::Ellipse2D>(entity)) {
+        renderEllipse(painter, std::get<Geometry::Ellipse2D>(entity), entityWithMeta);
+    } else if (std::holds_alternative<Geometry::Point2D>(entity)) {
+        renderPoint(painter, std::get<Geometry::Point2D>(entity), entityWithMeta);
     }
 }
 
@@ -589,6 +616,67 @@ void CADCanvas::renderArc(QPainter& painter, const Geometry::Arc2D& arc, const I
     painter.drawPath(path);
 }
 
+void CADCanvas::renderEllipse(QPainter& painter, const Geometry::Ellipse2D& ellipse, const Import::GeometryEntityWithMetadata& metadata) {
+    // Get color from DXF
+    QColor color;
+    int width = 2;
+
+    if (selectionManager_.isSelected(metadata.handle)) {
+        color = QColor(0, 102, 255); // Blue #0066FF
+        width = 3;
+    } else {
+        color = Import::DXFColors::toQColor(metadata.colorNumber, QColor(0, 0, 0));
+    }
+
+    // Sample points along ellipse and draw path
+    const int numSamples = std::max(24, static_cast<int>(ellipse.sweepAngle() * 180.0 / Geometry::PI / 10.0));  // ~10° per segment
+
+    QPainterPath path;
+    bool firstPoint = true;
+
+    for (int i = 0; i <= numSamples; ++i) {
+        double t = static_cast<double>(i) / numSamples;
+        Geometry::Point2D worldPt = ellipse.pointAt(t);
+        QPointF screenPt = viewport_.worldToScreen(worldPt);
+
+        if (firstPoint) {
+            path.moveTo(screenPt);
+            firstPoint = false;
+        } else {
+            path.lineTo(screenPt);
+        }
+    }
+
+    painter.setPen(QPen(color, width));
+    painter.setBrush(Qt::NoBrush);
+    painter.drawPath(path);
+}
+
+void CADCanvas::renderPoint(QPainter& painter, const Geometry::Point2D& point, const Import::GeometryEntityWithMetadata& metadata) {
+    QPointF screenPt = viewport_.worldToScreen(point);
+
+    // Get color from DXF
+    QColor color;
+    int size = 4;  // Point marker size in pixels
+
+    if (selectionManager_.isSelected(metadata.handle)) {
+        color = QColor(0, 102, 255); // Blue #0066FF
+        size = 6;
+    } else {
+        color = Import::DXFColors::toQColor(metadata.colorNumber, QColor(0, 0, 0));
+    }
+
+    // Draw point as a small filled circle
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QBrush(color));
+    painter.drawEllipse(screenPt, size, size);
+
+    // Draw cross marker
+    painter.setPen(QPen(color, 1));
+    painter.drawLine(screenPt - QPointF(size * 2, 0), screenPt + QPointF(size * 2, 0));
+    painter.drawLine(screenPt - QPointF(0, size * 2), screenPt + QPointF(0, size * 2));
+}
+
 void CADCanvas::renderSnapIndicator(QPainter& painter) {
     // Only render if there's an active snap point
     auto snapPoint = snapManager_.lastSnapPoint();
@@ -638,6 +726,129 @@ void CADCanvas::renderSnapIndicator(QPainter& painter) {
     painter.drawEllipse(screenPos, halfSize + 2, halfSize + 2);
 }
 
+void CADCanvas::renderSelectionBoundingBox(QPainter& painter) {
+    // Only render if there are selected entities
+    if (selectionManager_.isEmpty()) {
+        return;
+    }
+
+    // Calculate merged bounding box of all selected entities
+    std::optional<Geometry::BoundingBox> selectionBBox;
+
+    for (const auto& entityWithMeta : entities_) {
+        if (!selectionManager_.isSelected(entityWithMeta.handle)) {
+            continue;
+        }
+
+        const auto& entity = entityWithMeta.entity;
+        Geometry::BoundingBox entityBox;
+
+        if (std::holds_alternative<Geometry::Line2D>(entity)) {
+            entityBox = std::get<Geometry::Line2D>(entity).boundingBox();
+        } else if (std::holds_alternative<Geometry::Arc2D>(entity)) {
+            entityBox = std::get<Geometry::Arc2D>(entity).boundingBox();
+        } else if (std::holds_alternative<Geometry::Ellipse2D>(entity)) {
+            entityBox = std::get<Geometry::Ellipse2D>(entity).boundingBox();
+        } else if (std::holds_alternative<Geometry::Point2D>(entity)) {
+            const auto& pt = std::get<Geometry::Point2D>(entity);
+            entityBox = Geometry::BoundingBox::fromPoints(pt, pt);
+        } else {
+            continue;
+        }
+
+        if (selectionBBox) {
+            selectionBBox = selectionBBox->merge(entityBox);
+        } else {
+            selectionBBox = entityBox;
+        }
+    }
+
+    if (!selectionBBox || !selectionBBox->isValid()) {
+        return;
+    }
+
+    // Convert bounding box corners to screen coordinates
+    QPointF topLeft = viewport_.worldToScreen(
+        Geometry::Point2D(selectionBBox->minX(), selectionBBox->maxY()));
+    QPointF bottomRight = viewport_.worldToScreen(
+        Geometry::Point2D(selectionBBox->maxX(), selectionBBox->minY()));
+
+    QRectF rect(topLeft, bottomRight);
+    rect = rect.normalized();
+
+    // Draw dashed blue selection bounding box
+    const QColor selectionColor(0, 102, 255);  // #0066FF
+    QPen pen(selectionColor, 1, Qt::DashLine);
+    painter.setPen(pen);
+    painter.setBrush(Qt::NoBrush);
+    painter.drawRect(rect);
+}
+
+void CADCanvas::renderGripPoints(QPainter& painter) {
+    // Only render if there are selected entities
+    if (selectionManager_.isEmpty()) {
+        return;
+    }
+
+    // Calculate merged bounding box of all selected entities
+    std::optional<Geometry::BoundingBox> selectionBBox;
+
+    for (const auto& entityWithMeta : entities_) {
+        if (!selectionManager_.isSelected(entityWithMeta.handle)) {
+            continue;
+        }
+
+        const auto& entity = entityWithMeta.entity;
+        Geometry::BoundingBox entityBox;
+
+        if (std::holds_alternative<Geometry::Line2D>(entity)) {
+            entityBox = std::get<Geometry::Line2D>(entity).boundingBox();
+        } else if (std::holds_alternative<Geometry::Arc2D>(entity)) {
+            entityBox = std::get<Geometry::Arc2D>(entity).boundingBox();
+        } else if (std::holds_alternative<Geometry::Ellipse2D>(entity)) {
+            entityBox = std::get<Geometry::Ellipse2D>(entity).boundingBox();
+        } else if (std::holds_alternative<Geometry::Point2D>(entity)) {
+            const auto& pt = std::get<Geometry::Point2D>(entity);
+            entityBox = Geometry::BoundingBox::fromPoints(pt, pt);
+        } else {
+            continue;
+        }
+
+        if (selectionBBox) {
+            selectionBBox = selectionBBox->merge(entityBox);
+        } else {
+            selectionBBox = entityBox;
+        }
+    }
+
+    if (!selectionBBox || !selectionBBox->isValid()) {
+        return;
+    }
+
+    // Get the 4 corners in world coordinates
+    Geometry::Point2D corners[4] = {
+        Geometry::Point2D(selectionBBox->minX(), selectionBBox->maxY()),  // Top-left
+        Geometry::Point2D(selectionBBox->maxX(), selectionBBox->maxY()),  // Top-right
+        Geometry::Point2D(selectionBBox->maxX(), selectionBBox->minY()),  // Bottom-right
+        Geometry::Point2D(selectionBBox->minX(), selectionBBox->minY())   // Bottom-left
+    };
+
+    // Grip point style: 6x6 pixel filled blue squares
+    const int gripSize = 6;
+    const int halfGrip = gripSize / 2;
+    const QColor gripColor(0, 102, 255);  // #0066FF
+
+    painter.setPen(QPen(gripColor, 1));
+    painter.setBrush(QBrush(gripColor));
+
+    for (const auto& corner : corners) {
+        QPointF screenPos = viewport_.worldToScreen(corner);
+        QRectF gripRect(screenPos.x() - halfGrip, screenPos.y() - halfGrip,
+                        gripSize, gripSize);
+        painter.drawRect(gripRect);
+    }
+}
+
 // ============================================================================
 // MOUSE INTERACTION
 // ============================================================================
@@ -651,16 +862,52 @@ void CADCanvas::mousePressEvent(QMouseEvent* event) {
         // Handle selection
         Geometry::Point2D worldPos = viewport_.screenToWorld(event->pos());
         std::string hitHandle = hitTest(worldPos);
-        
-        // Single click: Clear current selection, then select new (if any)
-        // TODO: Handle Ctrl/Shift modifiers for multi-selection later
-        selectionManager_.clear();
-        
+
+        // Check for modifier keys
+        bool shiftHeld = event->modifiers() & Qt::ShiftModifier;
+        bool ctrlHeld = event->modifiers() & Qt::ControlModifier;
+
         if (!hitHandle.empty()) {
-            selectionManager_.select(hitHandle);
+            // Clicked on an entity - handle single selection
+            if (shiftHeld) {
+                // Shift + click: Toggle selection (add/remove without clearing)
+                selectionManager_.toggle(hitHandle);
+            } else if (ctrlHeld) {
+                // Ctrl + click: Add to selection (without clearing)
+                selectionManager_.select(hitHandle);
+            } else {
+                // No modifier: Clear current selection, then select
+                selectionManager_.clear();
+                selectionManager_.select(hitHandle);
+            }
+            emit selectionChanged(selectionManager_.selectedCount());
+        } else {
+            // Clicked on empty space - start box selection (Inside mode)
+            if (!shiftHeld && !ctrlHeld) {
+                selectionManager_.clear();
+                emit selectionChanged(selectionManager_.selectedCount());
+            }
+            boxSelectMode_ = BoxSelectMode::Inside;
+            boxSelectStartScreen_ = event->pos();
+            boxSelectCurrentScreen_ = event->pos();
+            setCursor(Qt::CrossCursor);
         }
-        
+
         update(); // Trigger repaint
+    } else if (event->button() == Qt::RightButton) {
+        // Right click on empty space - start box selection (Crossing mode)
+        Geometry::Point2D worldPos = viewport_.screenToWorld(event->pos());
+        std::string hitHandle = hitTest(worldPos);
+
+        if (hitHandle.empty()) {
+            // No entity under cursor - start crossing box selection
+            boxSelectMode_ = BoxSelectMode::Crossing;
+            boxSelectStartScreen_ = event->pos();
+            boxSelectCurrentScreen_ = event->pos();
+            setCursor(Qt::CrossCursor);
+            update();
+        }
+        // Note: Right-click on entity could be context menu (future feature)
     }
 }
 
@@ -674,34 +921,36 @@ void CADCanvas::mouseMoveEvent(QMouseEvent* event) {
     if (snappedPoint) {
         emit cursorPositionChanged(snappedPoint->x(), snappedPoint->y());
 
-        // Show tooltip with snap information
-        auto snapType = snapManager_.lastSnapType();
-        if (snapType != SnapManager::SnapType::None) {
-            QString snapTypeName;
-            switch (snapType) {
-                case SnapManager::SnapType::Grid:
-                    snapTypeName = "Grid";
-                    break;
-                case SnapManager::SnapType::Endpoint:
-                    snapTypeName = "Endpoint";
-                    break;
-                case SnapManager::SnapType::Midpoint:
-                    snapTypeName = "Midpoint";
-                    break;
-                case SnapManager::SnapType::Nearest:
-                    snapTypeName = "Nearest";
-                    break;
-                default:
-                    snapTypeName = "Unknown";
-                    break;
+        // Show tooltip with snap information (only when not box selecting)
+        if (boxSelectMode_ == BoxSelectMode::None) {
+            auto snapType = snapManager_.lastSnapType();
+            if (snapType != SnapManager::SnapType::None) {
+                QString snapTypeName;
+                switch (snapType) {
+                    case SnapManager::SnapType::Grid:
+                        snapTypeName = "Grid";
+                        break;
+                    case SnapManager::SnapType::Endpoint:
+                        snapTypeName = "Endpoint";
+                        break;
+                    case SnapManager::SnapType::Midpoint:
+                        snapTypeName = "Midpoint";
+                        break;
+                    case SnapManager::SnapType::Nearest:
+                        snapTypeName = "Nearest";
+                        break;
+                    default:
+                        snapTypeName = "Unknown";
+                        break;
+                }
+
+                QString tooltipText = QString("%1 Snap\nX: %2\nY: %3")
+                    .arg(snapTypeName)
+                    .arg(snappedPoint->x(), 0, 'f', 3)
+                    .arg(snappedPoint->y(), 0, 'f', 3);
+
+                QToolTip::showText(event->globalPosition().toPoint(), tooltipText, this);
             }
-
-            QString tooltipText = QString("%1 Snap\nX: %2\nY: %3")
-                .arg(snapTypeName)
-                .arg(snappedPoint->x(), 0, 'f', 3)
-                .arg(snappedPoint->y(), 0, 'f', 3);
-
-            QToolTip::showText(event->globalPosition().toPoint(), tooltipText, this);
         }
     } else {
         emit cursorPositionChanged(lastWorldPos_.x(), lastWorldPos_.y());
@@ -714,6 +963,10 @@ void CADCanvas::mouseMoveEvent(QMouseEvent* event) {
         lastMousePos_ = event->pos();
         update();
         emit viewportChanged(viewport_.zoomLevel(), viewport_.panX(), viewport_.panY());
+    } else if (boxSelectMode_ != BoxSelectMode::None) {
+        // Update box selection rectangle
+        boxSelectCurrentScreen_ = event->pos();
+        update();
     } else {
         // Trigger repaint to show/update snap indicator
         update();
@@ -724,6 +977,46 @@ void CADCanvas::mouseReleaseEvent(QMouseEvent* event) {
     if (event->button() == Qt::MiddleButton) {
         isPanning_ = false;
         setCursor(Qt::ArrowCursor);
+    } else if ((event->button() == Qt::LeftButton && boxSelectMode_ == BoxSelectMode::Inside) ||
+               (event->button() == Qt::RightButton && boxSelectMode_ == BoxSelectMode::Crossing)) {
+        // Complete box selection
+        boxSelectCurrentScreen_ = event->pos();
+
+        // Calculate selection box in world coordinates
+        Geometry::Point2D worldStart = viewport_.screenToWorld(boxSelectStartScreen_);
+        Geometry::Point2D worldEnd = viewport_.screenToWorld(boxSelectCurrentScreen_);
+        Geometry::BoundingBox selectionBox = Geometry::BoundingBox::fromPoints(worldStart, worldEnd);
+
+        // Only perform selection if box has meaningful size (> 3 pixels in both directions)
+        double screenWidth = std::abs(boxSelectCurrentScreen_.x() - boxSelectStartScreen_.x());
+        double screenHeight = std::abs(boxSelectCurrentScreen_.y() - boxSelectStartScreen_.y());
+
+        if (screenWidth > 3 && screenHeight > 3) {
+            // Get entities in the selection box
+            std::vector<std::string> selectedEntities = getEntitiesInBox(selectionBox, boxSelectMode_);
+
+            // Check for modifier keys
+            bool shiftHeld = event->modifiers() & Qt::ShiftModifier;
+            bool ctrlHeld = event->modifiers() & Qt::ControlModifier;
+
+            // Apply selection based on modifiers
+            for (const auto& handle : selectedEntities) {
+                if (shiftHeld) {
+                    selectionManager_.toggle(handle);
+                } else if (ctrlHeld) {
+                    selectionManager_.select(handle);
+                } else {
+                    selectionManager_.select(handle);
+                }
+            }
+
+            emit selectionChanged(selectionManager_.selectedCount());
+        }
+
+        // Reset box selection state
+        boxSelectMode_ = BoxSelectMode::None;
+        setCursor(Qt::ArrowCursor);
+        update();
     }
 }
 
@@ -753,27 +1046,103 @@ std::string CADCanvas::hitTest(const Geometry::Point2D& point) {
     // Screen tolerance: 10 pixels
     // World tolerance: 10 pixels / zoomLevel
     double worldTolerance = 10.0 / viewport_.zoomLevel();
-    
+
     std::string closestHandle = "";
     double closestDist = worldTolerance; // Initialize with max acceptable distance
-    
+
     for (const auto& entityWithMeta : entities_) {
         const auto& entity = entityWithMeta.entity;
         double dist = std::numeric_limits<double>::max();
-        
+
         if (std::holds_alternative<Geometry::Line2D>(entity)) {
             dist = Geometry::GeometryMath::distancePointToSegment(point, std::get<Geometry::Line2D>(entity));
         } else if (std::holds_alternative<Geometry::Arc2D>(entity)) {
             dist = Geometry::GeometryMath::distancePointToArc(point, std::get<Geometry::Arc2D>(entity));
+        } else if (std::holds_alternative<Geometry::Ellipse2D>(entity)) {
+            dist = Geometry::GeometryMath::distancePointToEllipse(point, std::get<Geometry::Ellipse2D>(entity));
+        } else if (std::holds_alternative<Geometry::Point2D>(entity)) {
+            // Direct distance to point entity
+            dist = point.distanceTo(std::get<Geometry::Point2D>(entity));
         }
-        
+
         if (dist < closestDist) {
             closestDist = dist;
             closestHandle = entityWithMeta.handle;
         }
     }
-    
+
     return closestHandle;
+}
+
+void CADCanvas::renderSelectionBox(QPainter& painter) {
+    // Calculate rectangle from start to current position
+    QRectF rect(boxSelectStartScreen_, boxSelectCurrentScreen_);
+    rect = rect.normalized();  // Ensure positive width/height
+
+    // Set style based on mode
+    QColor fillColor;
+    QColor borderColor;
+    Qt::PenStyle penStyle;
+
+    if (boxSelectMode_ == BoxSelectMode::Inside) {
+        // Inside mode: solid blue rectangle (left-to-right drag convention)
+        fillColor = QColor(0, 102, 255, 40);    // Semi-transparent blue
+        borderColor = QColor(0, 102, 255);      // Blue border
+        penStyle = Qt::SolidLine;
+    } else {
+        // Crossing mode: dashed green rectangle (right-to-left drag convention)
+        fillColor = QColor(0, 200, 0, 40);      // Semi-transparent green
+        borderColor = QColor(0, 200, 0);        // Green border
+        penStyle = Qt::DashLine;
+    }
+
+    // Draw filled rectangle
+    painter.setBrush(QBrush(fillColor));
+    painter.setPen(QPen(borderColor, 1, penStyle));
+    painter.drawRect(rect);
+}
+
+std::vector<std::string> CADCanvas::getEntitiesInBox(
+    const Geometry::BoundingBox& selectionBox,
+    BoxSelectMode mode
+) {
+    std::vector<std::string> result;
+
+    for (const auto& entityWithMeta : entities_) {
+        const auto& entity = entityWithMeta.entity;
+        Geometry::BoundingBox entityBox;
+
+        // Get bounding box for each entity type
+        if (std::holds_alternative<Geometry::Line2D>(entity)) {
+            entityBox = std::get<Geometry::Line2D>(entity).boundingBox();
+        } else if (std::holds_alternative<Geometry::Arc2D>(entity)) {
+            entityBox = std::get<Geometry::Arc2D>(entity).boundingBox();
+        } else if (std::holds_alternative<Geometry::Ellipse2D>(entity)) {
+            entityBox = std::get<Geometry::Ellipse2D>(entity).boundingBox();
+        } else if (std::holds_alternative<Geometry::Point2D>(entity)) {
+            // Point is a single point - create tiny bbox
+            const auto& pt = std::get<Geometry::Point2D>(entity);
+            entityBox = Geometry::BoundingBox::fromPoints(pt, pt);
+        } else {
+            continue;  // Unknown entity type
+        }
+
+        bool selected = false;
+
+        if (mode == BoxSelectMode::Inside) {
+            // Inside mode: entity must be fully contained in selection box
+            selected = selectionBox.containsBox(entityBox);
+        } else {
+            // Crossing mode: entity must touch or intersect selection box
+            selected = selectionBox.intersects(entityBox);
+        }
+
+        if (selected) {
+            result.push_back(entityWithMeta.handle);
+        }
+    }
+
+    return result;
 }
 
 } // namespace UI
