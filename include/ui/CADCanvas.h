@@ -249,6 +249,7 @@ private:
     // Box selection helpers
     void renderSelectionBox(QPainter& painter);
     std::vector<std::string> getEntitiesInBox(const Geometry::BoundingBox& selectionBox, BoxSelectMode mode);
+    void completeBoxSelection();
 };
 
 } // namespace UI

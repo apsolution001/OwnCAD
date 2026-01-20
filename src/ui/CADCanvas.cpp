@@ -1,5 +1,7 @@
 #include "ui/CADCanvas.h"
 #include "ui/LineTool.h"
+#include "ui/ArcTool.h"
+#include "ui/RectangleTool.h"
 #include "geometry/GeometryConstants.h"
 #include "geometry/BoundingBox.h"
 #include "geometry/GeometryMath.h"
@@ -314,6 +316,8 @@ CADCanvas::CADCanvas(QWidget* parent)
 
     // Register drawing tools
     toolManager_->registerTool(std::make_unique<LineTool>());
+    toolManager_->registerTool(std::make_unique<ArcTool>());
+    toolManager_->registerTool(std::make_unique<RectangleTool>());
 
     // Connect tool manager signals
     connect(toolManager_.get(), &ToolManager::geometryChanged, this, [this]() {
@@ -922,32 +926,38 @@ void CADCanvas::mousePressEvent(QMouseEvent* event) {
             }
             emit selectionChanged(selectionManager_.selectedCount());
         } else {
-            // Clicked on empty space - start box selection (Inside mode)
+            // Clicked on empty space
+            // Check if we are already in box select mode (second click of Click-Move-Click)
+            if (boxSelectMode_ != BoxSelectMode::None) {
+                completeBoxSelection();
+                return;
+            }
+
+            // Otherwise, start box selection
             if (!shiftHeld && !ctrlHeld) {
                 selectionManager_.clear();
                 emit selectionChanged(selectionManager_.selectedCount());
             }
-            boxSelectMode_ = BoxSelectMode::Inside;
+            
+            // Start as None, will decide mode on first move
+            boxSelectMode_ = BoxSelectMode::None; 
             boxSelectStartScreen_ = event->pos();
             boxSelectCurrentScreen_ = event->pos();
+             
+             // For now, let's strictly follow the plan:
+             // Start tracking, but mode is undetermined yet (or default Inside)
+             // Let's set it to Inside initially to match "start" logic, 
+             // but `mouseMoveEvent` will immediately correct it.
+             // Actually, better to use a specific state or just check start pos vs current pos.
+             boxSelectMode_ = BoxSelectMode::Inside; // Default start
+             
             setCursor(Qt::CrossCursor);
         }
 
         update(); // Trigger repaint
     } else if (event->button() == Qt::RightButton) {
-        // Right click on empty space - start box selection (Crossing mode)
-        Geometry::Point2D worldPos = viewport_.screenToWorld(event->pos());
-        std::string hitHandle = hitTest(worldPos);
-
-        if (hitHandle.empty()) {
-            // No entity under cursor - start crossing box selection
-            boxSelectMode_ = BoxSelectMode::Crossing;
-            boxSelectStartScreen_ = event->pos();
-            boxSelectCurrentScreen_ = event->pos();
-            setCursor(Qt::CrossCursor);
-            update();
-        }
-        // Note: Right-click on entity could be context menu (future feature)
+        // Right click handling - reserved for future Context Menu
+        // Previously used for Crossing mode, now removed.
     }
 }
 
@@ -1013,6 +1023,16 @@ void CADCanvas::mouseMoveEvent(QMouseEvent* event) {
     } else if (boxSelectMode_ != BoxSelectMode::None) {
         // Update box selection rectangle
         boxSelectCurrentScreen_ = event->pos();
+
+        // Dynamic Mode Switching based on Drag Direction (AutoCAD style)
+        // Right drag (Current X > Start X) -> Inside Mode
+        // Left drag (Current X < Start X) -> Crossing Mode
+        if (boxSelectCurrentScreen_.x() >= boxSelectStartScreen_.x()) {
+            boxSelectMode_ = BoxSelectMode::Inside;
+        } else {
+            boxSelectMode_ = BoxSelectMode::Crossing;
+        }
+
         update();
     } else {
         // Trigger repaint to show/update snap indicator
@@ -1021,50 +1041,79 @@ void CADCanvas::mouseMoveEvent(QMouseEvent* event) {
 }
 
 void CADCanvas::mouseReleaseEvent(QMouseEvent* event) {
+    // Forward to tool manager first if tool is active
+    if (toolManager_->hasActiveTool()) {
+        Geometry::Point2D worldPos = viewport_.screenToWorld(event->pos());
+        // Apply snap to get precise point (same as press/move)
+        auto snappedPoint = snapManager_.snap(worldPos, entities_, viewport_.zoomLevel());
+        Geometry::Point2D inputPoint = snappedPoint.value_or(worldPos);
+
+        ToolResult result = toolManager_->handleMouseRelease(inputPoint, event);
+        if (result != ToolResult::Ignored) {
+            update();
+            return;  // Tool handled the event
+        }
+    }
+
     if (event->button() == Qt::MiddleButton) {
         isPanning_ = false;
         setCursor(Qt::ArrowCursor);
-    } else if ((event->button() == Qt::LeftButton && boxSelectMode_ == BoxSelectMode::Inside) ||
-               (event->button() == Qt::RightButton && boxSelectMode_ == BoxSelectMode::Crossing)) {
-        // Complete box selection
-        boxSelectCurrentScreen_ = event->pos();
+    } else if (event->button() == Qt::LeftButton && boxSelectMode_ != BoxSelectMode::None) {
+        // Check for Drag vs Click
+        double screenDist = (event->pos() - boxSelectStartScreen_).manhattanLength();
 
-        // Calculate selection box in world coordinates
-        Geometry::Point2D worldStart = viewport_.screenToWorld(boxSelectStartScreen_);
-        Geometry::Point2D worldEnd = viewport_.screenToWorld(boxSelectCurrentScreen_);
-        Geometry::BoundingBox selectionBox = Geometry::BoundingBox::fromPoints(worldStart, worldEnd);
+        if (screenDist >= 5.0) {
+            // Drag > 5px: Standard Drag-and-Release selection
+            completeBoxSelection();
+        } 
+        // Else: Click < 5px: Do nothing (keep selection mode active for Click-Move-Click)
 
-        // Only perform selection if box has meaningful size (> 3 pixels in both directions)
-        double screenWidth = std::abs(boxSelectCurrentScreen_.x() - boxSelectStartScreen_.x());
-        double screenHeight = std::abs(boxSelectCurrentScreen_.y() - boxSelectStartScreen_.y());
 
-        if (screenWidth > 3 && screenHeight > 3) {
-            // Get entities in the selection box
-            std::vector<std::string> selectedEntities = getEntitiesInBox(selectionBox, boxSelectMode_);
+        // If it was a click (distance < 5), we assume user is starting Click-Move-Click
+        // So we just return and let them move the mouse. Do NOT reset boxSelectMode_.
+    }
+}
 
-            // Check for modifier keys
-            bool shiftHeld = event->modifiers() & Qt::ShiftModifier;
-            bool ctrlHeld = event->modifiers() & Qt::ControlModifier;
+void CADCanvas::completeBoxSelection() {
+    // Calculate selection box in world coordinates
+    Geometry::Point2D worldStart = viewport_.screenToWorld(boxSelectStartScreen_);
+    Geometry::Point2D worldEnd = viewport_.screenToWorld(boxSelectCurrentScreen_);
+    Geometry::BoundingBox selectionBox = Geometry::BoundingBox::fromPoints(worldStart, worldEnd);
 
-            // Apply selection based on modifiers
-            for (const auto& handle : selectedEntities) {
-                if (shiftHeld) {
-                    selectionManager_.toggle(handle);
-                } else if (ctrlHeld) {
-                    selectionManager_.select(handle);
-                } else {
-                    selectionManager_.select(handle);
-                }
+    // Only perform selection if box has meaningful size (> 3 pixels in both directions)
+    double screenWidth = std::abs(boxSelectCurrentScreen_.x() - boxSelectStartScreen_.x());
+    double screenHeight = std::abs(boxSelectCurrentScreen_.y() - boxSelectStartScreen_.y());
+
+    if (screenWidth > 3 && screenHeight > 3) {
+        // Get entities in the selection box
+        std::vector<std::string> selectedEntities = getEntitiesInBox(selectionBox, boxSelectMode_);
+
+        // Check for modifier keys
+        // Note: modifiers might not be accurate if called from non-event context, but usually OK
+        Qt::KeyboardModifiers modifiers = QGuiApplication::queryKeyboardModifiers();
+        bool shiftHeld = modifiers & Qt::ShiftModifier;
+        bool ctrlHeld = modifiers & Qt::ControlModifier;
+
+        // Apply selection based on modifiers
+        for (const auto& handle : selectedEntities) {
+            if (shiftHeld) {
+                selectionManager_.toggle(handle);
+            } else if (ctrlHeld) {
+                selectionManager_.select(handle);
+            } else {
+                selectionManager_.select(handle);
             }
-
-            emit selectionChanged(selectionManager_.selectedCount());
         }
 
-        // Reset box selection state
-        boxSelectMode_ = BoxSelectMode::None;
-        setCursor(Qt::ArrowCursor);
-        update();
+        emit selectionChanged(selectionManager_.selectedCount());
     }
+
+    // Reset box selection state
+    boxSelectMode_ = BoxSelectMode::None;
+    setCursor(Qt::ArrowCursor);
+    update();
+
+
 }
 
 void CADCanvas::wheelEvent(QWheelEvent* event) {
