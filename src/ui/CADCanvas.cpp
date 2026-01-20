@@ -1,4 +1,5 @@
 #include "ui/CADCanvas.h"
+#include "ui/LineTool.h"
 #include "geometry/GeometryConstants.h"
 #include "geometry/BoundingBox.h"
 #include "geometry/GeometryMath.h"
@@ -8,6 +9,7 @@
 #include <QPaintEvent>
 #include <QMouseEvent>
 #include <QWheelEvent>
+#include <QKeyEvent>
 #include <QToolTip>
 #include <QDebug>
 #include <cmath>
@@ -286,6 +288,7 @@ CADCanvas::CADCanvas(QWidget* parent)
     , entities_()
     , viewport_()
     , snapManager_()
+    , toolManager_(std::make_unique<ToolManager>(this))
     , gridSettings_()
     , isPanning_(false)
     , lastMousePos_()
@@ -308,9 +311,23 @@ CADCanvas::CADCanvas(QWidget* parent)
     gridSettings_.visible = true;
     gridSettings_.spacing = 10.0;
     gridSettings_.units = GridUnits::Millimeters;
+
+    // Register drawing tools
+    toolManager_->registerTool(std::make_unique<LineTool>());
+
+    // Connect tool manager signals
+    connect(toolManager_.get(), &ToolManager::geometryChanged, this, [this]() {
+        // Refresh entities from document model would go here
+        // For now, just repaint
+        update();
+    });
 }
 
 CADCanvas::~CADCanvas() {
+}
+
+void CADCanvas::setDocumentModel(Model::DocumentModel* model) {
+    toolManager_->setDocumentModel(model);
 }
 
 void CADCanvas::setEntities(const std::vector<Import::GeometryEntityWithMetadata>& entities) {
@@ -461,9 +478,18 @@ void CADCanvas::paintEvent(QPaintEvent* event) {
     // Render all entities
     renderEntities(painter);
 
+    // Render selection visuals (bounding box and grip points)
+    renderSelectionBoundingBox(painter);
+    renderGripPoints(painter);
+
     // Render box selection rectangle (if in box select mode)
     if (boxSelectMode_ != BoxSelectMode::None) {
         renderSelectionBox(painter);
+    }
+
+    // Render tool preview (before snap indicator)
+    if (toolManager_->hasActiveTool()) {
+        toolManager_->render(painter, viewport_);
     }
 
     // Render snap indicator (foreground, always on top)
@@ -859,7 +885,21 @@ void CADCanvas::mousePressEvent(QMouseEvent* event) {
         lastMousePos_ = event->pos();
         setCursor(Qt::ClosedHandCursor);
     } else if (event->button() == Qt::LeftButton) {
-        // Handle selection
+        // If a tool is active, forward to tool manager first
+        if (toolManager_->hasActiveTool()) {
+            Geometry::Point2D worldPos = viewport_.screenToWorld(event->pos());
+            // Apply snap to get precise point
+            auto snappedPoint = snapManager_.snap(worldPos, entities_, viewport_.zoomLevel());
+            Geometry::Point2D inputPoint = snappedPoint.value_or(worldPos);
+
+            ToolResult result = toolManager_->handleMousePress(inputPoint, event);
+            if (result != ToolResult::Ignored) {
+                update();
+                return;  // Tool handled the event
+            }
+        }
+
+        // Handle selection (no tool active or tool ignored event)
         Geometry::Point2D worldPos = viewport_.screenToWorld(event->pos());
         std::string hitHandle = hitTest(worldPos);
 
@@ -918,6 +958,13 @@ void CADCanvas::mouseMoveEvent(QMouseEvent* event) {
     // Calculate snap point (updates snapManager_ internal state for visual feedback)
     // Pass current zoom level for screen-space snap tolerance conversion
     auto snappedPoint = snapManager_.snap(lastWorldPos_, entities_, viewport_.zoomLevel());
+
+    // Forward to tool manager if tool is active
+    if (toolManager_->hasActiveTool()) {
+        Geometry::Point2D inputPoint = snappedPoint.value_or(lastWorldPos_);
+        toolManager_->handleMouseMove(inputPoint, event);
+    }
+
     if (snappedPoint) {
         emit cursorPositionChanged(snappedPoint->x(), snappedPoint->y());
 
@@ -1040,6 +1087,23 @@ void CADCanvas::resizeEvent(QResizeEvent* event) {
     QWidget::resizeEvent(event);
 }
 
+void CADCanvas::keyPressEvent(QKeyEvent* event) {
+    // Forward to tool manager first if tool is active
+    if (toolManager_->hasActiveTool()) {
+        ToolResult result = toolManager_->handleKeyPress(event);
+        if (result != ToolResult::Ignored) {
+            update();
+            // If tool was cancelled, update cursor
+            if (result == ToolResult::Cancelled && !toolManager_->hasActiveTool()) {
+                setCursor(Qt::ArrowCursor);
+            }
+            return;
+        }
+    }
+
+    // Handle other keyboard shortcuts here (tool activation handled in MainWindow)
+    QWidget::keyPressEvent(event);
+}
 
 std::string CADCanvas::hitTest(const Geometry::Point2D& point) {
     // Tolerances:

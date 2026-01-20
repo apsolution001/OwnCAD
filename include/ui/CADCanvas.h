@@ -10,8 +10,10 @@
 #include "import/GeometryConverter.h"
 #include "ui/GridSettingsDialog.h"
 #include "ui/SelectionManager.h"
+#include "ui/ToolManager.h"
 #include <vector>
 #include <optional>
+#include <memory>
 
 namespace OwnCAD {
 namespace UI {
@@ -186,6 +188,10 @@ public:
     void zoomExtents();
     const Viewport& viewport() const { return viewport_; }
 
+    // Tool management
+    ToolManager* toolManager() { return toolManager_.get(); }
+    void setDocumentModel(Model::DocumentModel* model);
+
 signals:
     void viewportChanged(double zoom, double panX, double panY);
     void cursorPositionChanged(double x, double y);
@@ -199,6 +205,7 @@ protected:
     void mouseReleaseEvent(QMouseEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
+    void keyPressEvent(QKeyEvent* event) override;
 
 private:
     // Rendering methods
@@ -218,6 +225,7 @@ private:
     std::vector<Import::GeometryEntityWithMetadata> entities_;
     Viewport viewport_;
     SnapManager snapManager_;
+    std::unique_ptr<ToolManager> toolManager_;
 
     // UI state
     GridSettings gridSettings_;

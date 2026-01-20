@@ -153,12 +153,17 @@ set(UI_HEADERS
     include/ui/CADCanvas.h
     include/ui/GridSettingsDialog.h
     include/ui/SelectionManager.h
+    include/ui/Tool.h
+    include/ui/ToolManager.h
+    include/ui/LineTool.h
 )
 
 set(UI_SOURCES
     src/ui/CADCanvas.cpp
     src/ui/GridSettingsDialog.cpp
     src/ui/SelectionManager.cpp
+    src/ui/ToolManager.cpp
+    src/ui/LineTool.cpp
 )
 
 add_library(ui STATIC
@@ -172,6 +177,7 @@ target_link_libraries(ui
     Qt6::Gui
     geometry
     import
+    model
 )
 
 target_include_directories(ui PUBLIC

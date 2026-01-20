@@ -124,6 +124,32 @@ public:
      */
     std::vector<std::string> getLayers() const;
 
+    // =========================================================================
+    // ENTITY CREATION (for drawing tools)
+    // =========================================================================
+
+    /**
+     * @brief Add a line entity to the document
+     * @param line Valid Line2D geometry
+     * @param layer Target layer (default: "0")
+     * @return Generated handle string, empty on failure
+     */
+    std::string addLine(const Geometry::Line2D& line, const std::string& layer = "0");
+
+    /**
+     * @brief Add an arc entity to the document
+     * @param arc Valid Arc2D geometry
+     * @param layer Target layer (default: "0")
+     * @return Generated handle string, empty on failure
+     */
+    std::string addArc(const Geometry::Arc2D& arc, const std::string& layer = "0");
+
+    /**
+     * @brief Generate next unique entity handle
+     * @return Handle string (e.g., "E00001")
+     */
+    std::string generateHandle();
+
 private:
     /**
      * @brief Run validation on all entities
@@ -148,6 +174,9 @@ private:
     std::string filePath_;
     std::vector<std::string> importErrors_;
     std::vector<std::string> importWarnings_;
+
+    // Handle generation
+    size_t nextHandleNumber_ = 1;
 };
 
 } // namespace Model

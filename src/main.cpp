@@ -29,6 +29,7 @@
 // UI headers
 #include "ui/CADCanvas.h"
 #include "ui/GridSettingsDialog.h"
+#include "ui/ToolManager.h"
 
 using namespace OwnCAD::Geometry;
 using namespace OwnCAD::Model;
@@ -54,7 +55,8 @@ public:
         , cursorPosLabel_(nullptr)
         , zoomLabel_(nullptr)
         , snapModeLabel_(nullptr)
-        , selectionLabel_(nullptr) {
+        , selectionLabel_(nullptr)
+        , toolPromptLabel_(nullptr) {
 
         setWindowTitle("OwnCAD - Industrial 2D CAD Validator v0.1.0");
         setMinimumSize(1024, 768);
@@ -76,6 +78,9 @@ private:
     void setupCentralWidget() {
         canvas_ = new CADCanvas(this);
 
+        // Connect canvas to document model (for drawing tools)
+        canvas_->setDocumentModel(document_.get());
+
         // Connect canvas signals
         connect(canvas_, &CADCanvas::viewportChanged,
                 this, &MainWindow::onViewportChanged);
@@ -83,6 +88,13 @@ private:
                 this, &MainWindow::onCursorPositionChanged);
         connect(canvas_, &CADCanvas::selectionChanged,
                 this, &MainWindow::onSelectionChanged);
+
+        // Connect tool manager signals
+        ToolManager* toolMgr = canvas_->toolManager();
+        connect(toolMgr, &ToolManager::statusPromptChanged,
+                this, &MainWindow::onToolPromptChanged);
+        connect(toolMgr, &ToolManager::geometryChanged,
+                this, &MainWindow::onGeometryChanged);
 
         // Enable grid and snap by default
         canvas_->setGridVisible(true);
@@ -132,6 +144,17 @@ private:
         snapMenu->addSeparator();
         snapMenu->addAction("Snap Settings...", this, &MainWindow::onSnapSettings);
 
+        // Draw menu
+        QMenu* drawMenu = menuBar()->addMenu("&Draw");
+
+        QAction* lineAction = drawMenu->addAction("&Line", this, &MainWindow::onLineTool);
+        lineAction->setShortcut(QKeySequence(Qt::Key_L));
+
+        drawMenu->addAction("&Arc", this, &MainWindow::onArcTool);
+        drawMenu->addAction("&Rectangle", this, &MainWindow::onRectangleTool);
+        drawMenu->addSeparator();
+        drawMenu->addAction("&Select (ESC)", this, &MainWindow::onSelectTool);
+
         // Tools menu
         QMenu* toolsMenu = menuBar()->addMenu("&Tools");
         toolsMenu->addAction("&Validate Geometry", this, &MainWindow::onValidate);
@@ -144,7 +167,15 @@ private:
     void setupStatusBar() {
         // Create permanent status bar widgets (right to left order)
 
-        // Snap mode indicator (rightmost)
+        // Tool prompt indicator (rightmost) - for drawing tool prompts
+        toolPromptLabel_ = new QLabel("");
+        toolPromptLabel_->setMinimumWidth(250);
+        toolPromptLabel_->setAlignment(Qt::AlignCenter);
+        toolPromptLabel_->setFrameStyle(QFrame::Panel | QFrame::Sunken);
+        toolPromptLabel_->setStyleSheet("font-weight: bold; color: #0066FF;");
+        statusBar()->addPermanentWidget(toolPromptLabel_);
+
+        // Snap mode indicator
         snapModeLabel_ = new QLabel("Snap: Grid");
         snapModeLabel_->setMinimumWidth(180);
         snapModeLabel_->setAlignment(Qt::AlignCenter);
@@ -481,6 +512,36 @@ private slots:
         );
     }
 
+    // Drawing tools
+    void onLineTool() {
+        ToolManager* toolMgr = canvas_->toolManager();
+        toolMgr->activateTool("line");
+        canvas_->setCursor(Qt::CrossCursor);
+    }
+
+    void onArcTool() {
+        statusBar()->showMessage("Arc Tool - To be implemented", 3000);
+    }
+
+    void onRectangleTool() {
+        statusBar()->showMessage("Rectangle Tool - To be implemented", 3000);
+    }
+
+    void onSelectTool() {
+        ToolManager* toolMgr = canvas_->toolManager();
+        toolMgr->deactivateTool();
+        canvas_->setCursor(Qt::ArrowCursor);
+    }
+
+    void onToolPromptChanged(const QString& prompt) {
+        toolPromptLabel_->setText(prompt);
+    }
+
+    void onGeometryChanged() {
+        // Refresh canvas with current document entities
+        canvas_->setEntities(document_->entities());
+    }
+
 private:
     // Document model (holds all geometry and validation state)
     std::unique_ptr<DocumentModel> document_;
@@ -493,6 +554,7 @@ private:
     QLabel* zoomLabel_;
     QLabel* snapModeLabel_;
     QLabel* selectionLabel_;
+    QLabel* toolPromptLabel_;
 };
 
 int main(int argc, char* argv[]) {

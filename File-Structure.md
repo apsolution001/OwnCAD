@@ -50,6 +50,7 @@ User interface components and interaction logic.
 
 ### Main
 - `src/main.cpp`: Application entry point; initializes `MainWindow` and the application loop.
+
   - MainWindow: menu bar, central CADCanvas, status bar with cursor position/zoom/snap/selection indicators.
 
 ## Tests (`tests/`)
