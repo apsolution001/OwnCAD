@@ -365,24 +365,21 @@ Each task is small enough to implement, test, and verify in one session.
 ### 2.3 Box Selection ✅
 **STATUS: COMPLETE**
 
-- [x] Left-drag box selection (inside only mode)
-  - Left-click on empty space starts Inside mode (CADCanvas.cpp:756-765)
-  - Solid blue rectangle visual feedback
-- [x] Right-drag box selection (crossing mode)
-  - Right-click on empty space starts Crossing mode (CADCanvas.cpp:769-782)
-  - Dashed green rectangle visual feedback
-- [x] Draw selection rectangle while dragging
-  - renderSelectionBox() method (CADCanvas.cpp:954-980)
-  - Semi-transparent fill with colored border
+- [x] Direction-based box selection (AutoCAD style)
+  - Left-click on empty space starts selection
+  - **Drag Right (Inside Mode):** Solid blue line, semi-transparent blue fill
+  - **Drag Left (Crossing Mode):** Dashed green line, semi-transparent green fill
+- [x] Visual feedback updates
+  - Dynamically switch color/style based on mouse position relative to start point
+  - renderSelectionBox() updates (CADCanvas.cpp:954-980)
 - [x] Bounding box intersection logic
-  - Uses BoundingBox::containsBox() for Inside mode
-  - Uses BoundingBox::intersects() for Crossing mode
-- [x] Inside mode: entity fully inside box
-  - getEntitiesInBox() with BoxSelectMode::Inside (CADCanvas.cpp:1009-1011)
-- [x] Crossing mode: entity touches or crosses box
-  - getEntitiesInBox() with BoxSelectMode::Crossing (CADCanvas.cpp:1012-1014)
+  - Inside Mode: Entity fully inside box
+  - Crossing Mode: Entity touches or overlaps box
+- [x] Logic Implementation
+  - Update `mousePressEvent` to start generic tracking
+  - Update `mouseMoveEvent` to toggle mode based on cursor X position
 
-**Deliverable**: ✅ Complete box selection with CAD-standard inside/crossing modes
+**Deliverable**: ✅ Intuitive direction-based box selection (Right=Inside, Left=Crossing)
 
 ### 2.4 Selection Visuals ✅
 **STATUS: COMPLETE**
@@ -414,28 +411,28 @@ Each task is small enough to implement, test, and verify in one session.
 - [x] Validate: no zero-length lines
 
 ### 3.2 Arc Tool
-- [ ] Create ArcTool class
-- [ ] Center–start–end workflow
-- [ ] Click 1: center point
-- [ ] Click 2: start point (defines radius)
-- [ ] Move mouse: preview arc
-- [ ] Click 3: end point (defines sweep)
-- [ ] Direction indicator (CCW default)
-- [ ] ESC to cancel
+- [x] Create ArcTool class
+- [x] Center–start–end workflow
+- [x] Click 1: center point
+- [x] Click 2: start point (defines radius)
+- [x] Move mouse: preview arc
+- [x] Click 3: end point (defines sweep)
+- [x] Direction indicator (CCW default)
+- [x] ESC to cancel
 
 ### 3.3 Rectangle Helper
-- [ ] Click first corner
-- [ ] Move mouse: preview rectangle
-- [ ] Click second corner: create 4 lines
-- [ ] Internally creates Line2D entities
-- [ ] No special "Rectangle" entity type
+- [x] Click first corner
+- [x] Move mouse: preview rectangle
+- [x] Click second corner: create 4 lines
+- [x] Internally creates Line2D entities
+- [x] No special "Rectangle" entity type
 
 ### 3.4 Tool Lifecycle
-- [ ] Tool activate/deactivate
-- [ ] Tool preview rendering
-- [ ] Tool commit (add to document)
-- [ ] Tool cancel (ESC key)
-- [ ] Status bar shows tool prompts
+- [x] Tool activate/deactivate
+- [x] Tool preview rendering
+- [x] Tool commit (add to document)
+- [x] Tool cancel (ESC key)
+- [x] Status bar shows tool prompts
 
 **Deliverable**: Minimal, predictable creation tools
 

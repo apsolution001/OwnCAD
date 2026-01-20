@@ -59,6 +59,16 @@ User interface components and interaction logic.
   - State machine: WaitingFirstPoint → WaitingSecondPoint → Commit.
   - Snap-aware point input, preview rendering (dashed line).
   - Continuous drawing mode, ESC to cancel.
+- `ArcTool.h/cpp`: Arc drawing tool implementation.
+  - State machine: WaitingCenterPoint → WaitingStartPoint → WaitingEndPoint → Commit.
+  - Center-Start-End workflow (3 clicks).
+  - Direction toggle (D key), CCW default.
+  - Preview rendering with direction indicator arrow.
+- `RectangleTool.h/cpp`: Rectangle drawing tool implementation.
+  - State machine: WaitingFirstCorner → WaitingSecondCorner → Commit.
+  - Two-click workflow, creates 4 Line2D entities (not a special type).
+  - Preview rendering with 4 dashed lines.
+  - Continuous drawing mode, ESC to cancel.
 
 ### Main
 - `src/main.cpp`: Application entry point; initializes `MainWindow` and the application loop.
