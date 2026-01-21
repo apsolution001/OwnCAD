@@ -247,6 +247,99 @@ Point2D closestPointOnArc(const Point2D& point, const Arc2D& arc) noexcept;
  */
 Point2D closestPointOnEllipse(const Point2D& point, const Ellipse2D& ellipse) noexcept;
 
+// ============================================================================
+// TRANSLATION (for transformation tools)
+// ============================================================================
+
+/**
+ * @brief Translate a point by displacement
+ * @param point Point to translate
+ * @param dx X displacement
+ * @param dy Y displacement
+ * @return New translated point
+ */
+Point2D translate(const Point2D& point, double dx, double dy) noexcept;
+
+/**
+ * @brief Translate a line by displacement (moves both endpoints)
+ * @param line Line to translate
+ * @param dx X displacement
+ * @param dy Y displacement
+ * @return New translated line, or nullopt if result is invalid
+ */
+std::optional<Line2D> translate(const Line2D& line, double dx, double dy) noexcept;
+
+/**
+ * @brief Translate an arc by displacement (moves center, preserves radius/angles)
+ * @param arc Arc to translate
+ * @param dx X displacement
+ * @param dy Y displacement
+ * @return New translated arc, or nullopt if result is invalid
+ */
+std::optional<Arc2D> translate(const Arc2D& arc, double dx, double dy) noexcept;
+
+/**
+ * @brief Translate an ellipse by displacement (moves center, preserves axes/angles)
+ * @param ellipse Ellipse to translate
+ * @param dx X displacement
+ * @param dy Y displacement
+ * @return New translated ellipse, or nullopt if result is invalid
+ */
+std::optional<Ellipse2D> translate(const Ellipse2D& ellipse, double dx, double dy) noexcept;
+
+// ============================================================================
+// ROTATION (for transformation tools)
+// ============================================================================
+
+/**
+ * @brief Rotate a point around a center point
+ * @param point Point to rotate
+ * @param center Center of rotation
+ * @param angleRadians Rotation angle in radians (positive = CCW)
+ * @return New rotated point
+ */
+Point2D rotate(const Point2D& point, const Point2D& center, double angleRadians) noexcept;
+
+/**
+ * @brief Rotate a line around a center point (rotates both endpoints)
+ * @param line Line to rotate
+ * @param center Center of rotation
+ * @param angleRadians Rotation angle in radians (positive = CCW)
+ * @return New rotated line, or nullopt if result is invalid
+ */
+std::optional<Line2D> rotate(const Line2D& line, const Point2D& center, double angleRadians) noexcept;
+
+/**
+ * @brief Rotate an arc around a center point
+ * @param arc Arc to rotate
+ * @param center Center of rotation
+ * @param angleRadians Rotation angle in radians (positive = CCW)
+ * @return New rotated arc, or nullopt if result is invalid
+ *
+ * Note: Rotates arc center AND adjusts start/end angles by the same amount.
+ * Arc direction (CCW/CW) is preserved.
+ */
+std::optional<Arc2D> rotate(const Arc2D& arc, const Point2D& center, double angleRadians) noexcept;
+
+/**
+ * @brief Rotate an ellipse around a center point
+ * @param ellipse Ellipse to rotate
+ * @param center Center of rotation
+ * @param angleRadians Rotation angle in radians (positive = CCW)
+ * @return New rotated ellipse, or nullopt if result is invalid
+ *
+ * Note: Rotates ellipse center AND major axis endpoint.
+ */
+std::optional<Ellipse2D> rotate(const Ellipse2D& ellipse, const Point2D& center, double angleRadians) noexcept;
+
+/**
+ * @brief Snap angle to common increments
+ * @param angleRadians Raw angle in radians
+ * @param snapIncrement Snap increment in radians (e.g., PI/12 for 15°)
+ * @return Snapped angle
+ */
+double snapAngle(double angleRadians, double snapIncrement) noexcept;
+
 } // namespace GeometryMath
 } // namespace Geometry
 } // namespace OwnCAD

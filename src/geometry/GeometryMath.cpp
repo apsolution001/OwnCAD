@@ -406,6 +406,107 @@ double distancePointToEllipse(const Point2D& point, const Ellipse2D& ellipse) no
     return distance(point, closest);
 }
 
+// ============================================================================
+// TRANSLATION
+// ============================================================================
+
+Point2D translate(const Point2D& point, double dx, double dy) noexcept {
+    return Point2D(point.x() + dx, point.y() + dy);
+}
+
+std::optional<Line2D> translate(const Line2D& line, double dx, double dy) noexcept {
+    Point2D newStart = translate(line.start(), dx, dy);
+    Point2D newEnd = translate(line.end(), dx, dy);
+    return Line2D::create(newStart, newEnd);
+}
+
+std::optional<Arc2D> translate(const Arc2D& arc, double dx, double dy) noexcept {
+    Point2D newCenter = translate(arc.center(), dx, dy);
+    return Arc2D::create(
+        newCenter,
+        arc.radius(),
+        arc.startAngle(),
+        arc.endAngle(),
+        arc.isCounterClockwise()
+    );
+}
+
+std::optional<Ellipse2D> translate(const Ellipse2D& ellipse, double dx, double dy) noexcept {
+    Point2D newCenter = translate(ellipse.center(), dx, dy);
+    Point2D newMajorAxisEnd = translate(ellipse.majorAxisEnd(), dx, dy);
+    return Ellipse2D::create(
+        newCenter,
+        newMajorAxisEnd,
+        ellipse.minorAxisRatio(),
+        ellipse.startAngle(),
+        ellipse.endAngle()
+    );
+}
+
+// ============================================================================
+// ROTATION
+// ============================================================================
+
+Point2D rotate(const Point2D& point, const Point2D& center, double angleRadians) noexcept {
+    // Translate to origin, rotate, translate back
+    double dx = point.x() - center.x();
+    double dy = point.y() - center.y();
+
+    double cosA = std::cos(angleRadians);
+    double sinA = std::sin(angleRadians);
+
+    double newX = dx * cosA - dy * sinA + center.x();
+    double newY = dx * sinA + dy * cosA + center.y();
+
+    return Point2D(newX, newY);
+}
+
+std::optional<Line2D> rotate(const Line2D& line, const Point2D& center, double angleRadians) noexcept {
+    Point2D newStart = rotate(line.start(), center, angleRadians);
+    Point2D newEnd = rotate(line.end(), center, angleRadians);
+    return Line2D::create(newStart, newEnd);
+}
+
+std::optional<Arc2D> rotate(const Arc2D& arc, const Point2D& center, double angleRadians) noexcept {
+    // Rotate the arc's center point
+    Point2D newArcCenter = rotate(arc.center(), center, angleRadians);
+
+    // Adjust start and end angles by the rotation amount
+    double newStartAngle = normalizeAngle(arc.startAngle() + angleRadians);
+    double newEndAngle = normalizeAngle(arc.endAngle() + angleRadians);
+
+    return Arc2D::create(
+        newArcCenter,
+        arc.radius(),
+        newStartAngle,
+        newEndAngle,
+        arc.isCounterClockwise()  // Direction preserved
+    );
+}
+
+std::optional<Ellipse2D> rotate(const Ellipse2D& ellipse, const Point2D& center, double angleRadians) noexcept {
+    // Rotate ellipse center
+    Point2D newCenter = rotate(ellipse.center(), center, angleRadians);
+
+    // Rotate major axis endpoint
+    Point2D newMajorAxisEnd = rotate(ellipse.majorAxisEnd(), center, angleRadians);
+
+    return Ellipse2D::create(
+        newCenter,
+        newMajorAxisEnd,
+        ellipse.minorAxisRatio(),
+        ellipse.startAngle(),
+        ellipse.endAngle()
+    );
+}
+
+double snapAngle(double angleRadians, double snapIncrement) noexcept {
+    if (snapIncrement <= GEOMETRY_EPSILON) {
+        return angleRadians;  // No snapping
+    }
+    return std::round(angleRadians / snapIncrement) * snapIncrement;
+}
+
 } // namespace GeometryMath
 } // namespace Geometry
 } // namespace OwnCAD
