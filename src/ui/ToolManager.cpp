@@ -28,6 +28,11 @@ void ToolManager::registerTool(std::unique_ptr<Tool> tool) {
         tool->setDocumentModel(documentModel_);
     }
 
+    // Set command history if available
+    if (commandHistory_) {
+        tool->setCommandHistory(commandHistory_);
+    }
+
     tools_[toolId] = std::move(tool);
     qDebug() << "ToolManager: Registered tool" << toolId;
 }
@@ -38,6 +43,15 @@ void ToolManager::setDocumentModel(Model::DocumentModel* model) {
     // Update all registered tools
     for (auto& [id, tool] : tools_) {
         tool->setDocumentModel(model);
+    }
+}
+
+void ToolManager::setCommandHistory(Model::CommandHistory* history) {
+    commandHistory_ = history;
+
+    // Update all registered tools
+    for (auto& [id, tool] : tools_) {
+        tool->setCommandHistory(history);
     }
 }
 

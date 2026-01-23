@@ -1,6 +1,9 @@
 #include "ui/LineTool.h"
 #include "ui/CADCanvas.h"
 #include "model/DocumentModel.h"
+#include "model/CommandHistory.h"
+#include "model/EntityCommands.h"
+#include "import/GeometryConverter.h"
 #include <QPen>
 #include <QBrush>
 #include <QDebug>
@@ -158,14 +161,29 @@ bool LineTool::commitLine() {
         return false;
     }
 
-    // Add to document model
-    std::string handle = documentModel_->addLine(*line);
-    if (handle.empty()) {
-        qWarning() << "LineTool: Failed to add line to document";
-        return false;
+    // Use command system if available (enables undo/redo)
+    if (commandHistory_) {
+        auto command = std::make_unique<Model::CreateEntityCommand>(
+            documentModel_,
+            Import::GeometryEntity{*line},
+            "0"  // default layer
+        );
+
+        if (!commandHistory_->executeCommand(std::move(command))) {
+            qWarning() << "LineTool: Failed to execute create command";
+            return false;
+        }
+        qDebug() << "LineTool: Created line via command system";
+    } else {
+        // Fallback: direct add (no undo support)
+        std::string handle = documentModel_->addLine(*line);
+        if (handle.empty()) {
+            qWarning() << "LineTool: Failed to add line to document";
+            return false;
+        }
+        qDebug() << "LineTool: Created line with handle" << QString::fromStdString(handle);
     }
 
-    qDebug() << "LineTool: Created line with handle" << QString::fromStdString(handle);
     return true;
 }
 

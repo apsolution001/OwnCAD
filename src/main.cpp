@@ -25,11 +25,15 @@
 
 // Model headers
 #include "model/DocumentModel.h"
+#include "model/CommandHistory.h"
 
 // UI headers
 #include "ui/CADCanvas.h"
 #include "ui/GridSettingsDialog.h"
 #include "ui/ToolManager.h"
+#include "ui/MoveTool.h"
+#include "ui/RotateTool.h"
+#include "ui/MirrorTool.h"
 
 using namespace OwnCAD::Geometry;
 using namespace OwnCAD::Model;
@@ -56,13 +60,20 @@ public:
         , zoomLabel_(nullptr)
         , snapModeLabel_(nullptr)
         , selectionLabel_(nullptr)
-        , toolPromptLabel_(nullptr) {
+        , validationLabel_(nullptr)
+        , toolPromptLabel_(nullptr)
+        , commandHistory_(nullptr)
+        , undoAction_(nullptr)
+        , redoAction_(nullptr) {
 
         setWindowTitle("OwnCAD - Industrial 2D CAD Validator v0.1.0");
         setMinimumSize(1024, 768);
 
         // Create central CAD canvas
         setupCentralWidget();
+
+        // Create command history (undo/redo system)
+        setupCommandHistory();
 
         // Create menu bar
         createMenus();
@@ -73,6 +84,12 @@ public:
         // Run geometry self-test
         runGeometrySelfTest();
     }
+
+    /**
+     * @brief Get command history for undo/redo operations.
+     * @return Pointer to CommandHistory (owned by MainWindow)
+     */
+    CommandHistory* commandHistory() { return commandHistory_; }
 
 private:
     void setupCentralWidget() {
@@ -95,6 +112,9 @@ private:
                 this, &MainWindow::onToolPromptChanged);
         connect(toolMgr, &ToolManager::geometryChanged,
                 this, &MainWindow::onGeometryChanged);
+        // Trigger validation when geometry changes via tools
+        connect(toolMgr, &ToolManager::geometryChanged,
+                [this]() { document_->runValidationAsync(); });
 
         // Enable grid and snap by default
         canvas_->setGridVisible(true);
@@ -102,6 +122,48 @@ private:
         canvas_->setSnapEnabled(SnapManager::SnapMode::Grid, true);
 
         setCentralWidget(canvas_);
+    }
+
+    void setupCommandHistory() {
+        commandHistory_ = new CommandHistory(this);
+
+        // Connect command history to ToolManager so tools can use undo/redo
+        canvas_->toolManager()->setCommandHistory(commandHistory_);
+
+        // Connect command history signals for status bar feedback
+        connect(commandHistory_, &CommandHistory::commandExecuted,
+                [this](const QString& desc) {
+                    statusBar()->showMessage(desc, 2000);
+                });
+
+        connect(commandHistory_, &CommandHistory::commandUndone,
+                [this](const QString& desc) {
+                    statusBar()->showMessage(QString("Undo: %1").arg(desc), 2000);
+                });
+
+        connect(commandHistory_, &CommandHistory::commandRedone,
+                [this](const QString& desc) {
+                    statusBar()->showMessage(QString("Redo: %1").arg(desc), 2000);
+                });
+
+        // Trigger validation on any history change (undo/redo/execute)
+        connect(commandHistory_, &CommandHistory::historyChanged,
+                [this]() { document_->runValidationAsync(); });
+
+        // Setup async validation callback
+        document_->setValidationCompletionCallback(
+            [this](const ValidationResult& result) {
+                // Marshal back to main thread
+                QMetaObject::invokeMethod(this, [this, result]() {
+                        // 1. Finalize model state (Main Thread)
+                        document_->finalizeValidation(result);
+                        
+                        // 2. Update UI
+                        updateValidationStatus(); 
+                    }, 
+                    Qt::QueuedConnection);
+            }
+        );
     }
 
 private:
@@ -113,10 +175,22 @@ private:
         fileMenu->addSeparator();
         fileMenu->addAction("E&xit", this, &QWidget::close);
 
-        // Edit menu
+        // Edit menu with Undo/Redo
         QMenu* editMenu = menuBar()->addMenu("&Edit");
-        editMenu->addAction("&Undo", this, &MainWindow::onUndo);
-        editMenu->addAction("&Redo", this, &MainWindow::onRedo);
+
+        undoAction_ = editMenu->addAction("&Undo");
+        undoAction_->setShortcut(QKeySequence::Undo);  // Ctrl+Z
+        undoAction_->setEnabled(false);
+        connect(undoAction_, &QAction::triggered, this, &MainWindow::onUndo);
+
+        redoAction_ = editMenu->addAction("&Redo");
+        redoAction_->setShortcut(QKeySequence::Redo);  // Ctrl+Y / Ctrl+Shift+Z
+        redoAction_->setEnabled(false);
+        connect(redoAction_, &QAction::triggered, this, &MainWindow::onRedo);
+
+        // Update action state when history changes
+        connect(commandHistory_, &CommandHistory::historyChanged,
+                this, &MainWindow::updateUndoRedoActions);
 
         // View menu
         QMenu* viewMenu = menuBar()->addMenu("&View");
@@ -155,8 +229,19 @@ private:
         drawMenu->addSeparator();
         drawMenu->addAction("&Select (ESC)", this, &MainWindow::onSelectTool);
 
-        // Tools menu
+        // Tools menu (transformation tools)
         QMenu* toolsMenu = menuBar()->addMenu("&Tools");
+
+        QAction* moveAction = toolsMenu->addAction("&Move", this, &MainWindow::onMoveTool);
+        moveAction->setShortcut(QKeySequence(Qt::Key_V));  // V for moVe (M is taken by Midpoint snap)
+
+        QAction* rotateAction = toolsMenu->addAction("&Rotate", this, &MainWindow::onRotateTool);
+        rotateAction->setShortcut(QKeySequence(Qt::Key_R));
+
+        QAction* mirrorAction = toolsMenu->addAction("M&irror", this, &MainWindow::onMirrorTool);
+        mirrorAction->setShortcut(QKeySequence(Qt::Key_I));  // I for mIrror
+
+        toolsMenu->addSeparator();
         toolsMenu->addAction("&Validate Geometry", this, &MainWindow::onValidate);
 
         // Help menu
@@ -187,7 +272,17 @@ private:
         selectionLabel_->setMinimumWidth(100);
         selectionLabel_->setAlignment(Qt::AlignCenter);
         selectionLabel_->setFrameStyle(QFrame::Panel | QFrame::Sunken);
+        selectionLabel_->setFrameStyle(QFrame::Panel | QFrame::Sunken);
         statusBar()->addPermanentWidget(selectionLabel_);
+
+        // Validation status indicator
+        validationLabel_ = new QLabel("Valid: -");
+        validationLabel_->setMinimumWidth(120);
+        validationLabel_->setAlignment(Qt::AlignCenter);
+        validationLabel_->setFrameStyle(QFrame::Panel | QFrame::Sunken);
+        // Default to green check
+        validationLabel_->setStyleSheet("color: green; font-weight: bold;");
+        statusBar()->addPermanentWidget(validationLabel_);
 
         // Zoom level indicator
         zoomLabel_ = new QLabel("Zoom: 1.00x");
@@ -235,6 +330,7 @@ private slots:
     void onNew() {
         document_->clear();
         canvas_->clear();
+        commandHistory_->clear();
         statusBar()->showMessage("New document created", 3000);
     }
 
@@ -265,6 +361,9 @@ private slots:
             qDebug() << "  Arcs:" << stats.totalArcs;
             qDebug() << "  Valid:" << stats.validEntities;
             qDebug() << "  Invalid:" << stats.invalidEntities;
+
+            // Clear command history for new document
+            commandHistory_->clear();
 
             // Load geometry into canvas
             canvas_->setEntities(document_->entities());
@@ -301,11 +400,37 @@ private slots:
     }
 
     void onUndo() {
-        statusBar()->showMessage("Undo - To be implemented in Phase 1, Week 3-4", 3000);
+        if (!commandHistory_->undo()) {
+            statusBar()->showMessage("Nothing to undo", 2000);
+        }
+        // Refresh canvas after undo
+        canvas_->setEntities(document_->entities());
     }
 
     void onRedo() {
-        statusBar()->showMessage("Redo - To be implemented in Phase 1, Week 3-4", 3000);
+        if (!commandHistory_->redo()) {
+            statusBar()->showMessage("Nothing to redo", 2000);
+        }
+        // Refresh canvas after redo
+        canvas_->setEntities(document_->entities());
+    }
+
+    void updateUndoRedoActions() {
+        // Update Undo action
+        undoAction_->setEnabled(commandHistory_->canUndo());
+        if (commandHistory_->canUndo()) {
+            undoAction_->setText(QString("&Undo %1").arg(commandHistory_->undoDescription()));
+        } else {
+            undoAction_->setText("&Undo");
+        }
+
+        // Update Redo action
+        redoAction_->setEnabled(commandHistory_->canRedo());
+        if (commandHistory_->canRedo()) {
+            redoAction_->setText(QString("&Redo %1").arg(commandHistory_->redoDescription()));
+        } else {
+            redoAction_->setText("&Redo");
+        }
     }
 
     void onValidate() {
@@ -537,6 +662,75 @@ private slots:
         canvas_->setCursor(Qt::ArrowCursor);
     }
 
+    void onMoveTool() {
+        // Check if there's a selection
+        std::vector<std::string> selection = canvas_->selectedHandles();
+        if (selection.empty()) {
+            statusBar()->showMessage("MOVE: Select entities first", 3000);
+            return;
+        }
+
+        // Get MoveTool and pass selection
+        ToolManager* toolMgr = canvas_->toolManager();
+        Tool* tool = toolMgr->tool("move");
+        if (tool) {
+            MoveTool* moveTool = dynamic_cast<MoveTool*>(tool);
+            if (moveTool) {
+                moveTool->setSelectedHandles(selection);
+            }
+        }
+
+        // Activate the tool
+        toolMgr->activateTool("move");
+        canvas_->setCursor(Qt::CrossCursor);
+    }
+
+    void onRotateTool() {
+        // Check if there's a selection
+        std::vector<std::string> selection = canvas_->selectedHandles();
+        if (selection.empty()) {
+            statusBar()->showMessage("ROTATE: Select entities first", 3000);
+            return;
+        }
+
+        // Get RotateTool and pass selection
+        ToolManager* toolMgr = canvas_->toolManager();
+        Tool* tool = toolMgr->tool("rotate");
+        if (tool) {
+            RotateTool* rotateTool = dynamic_cast<RotateTool*>(tool);
+            if (rotateTool) {
+                rotateTool->setSelectedHandles(selection);
+            }
+        }
+
+        // Activate the tool
+        toolMgr->activateTool("rotate");
+        canvas_->setCursor(Qt::CrossCursor);
+    }
+
+    void onMirrorTool() {
+        // Check if there's a selection
+        std::vector<std::string> selection = canvas_->selectedHandles();
+        if (selection.empty()) {
+            statusBar()->showMessage("MIRROR: Select entities first", 3000);
+            return;
+        }
+
+        // Get MirrorTool and pass selection
+        ToolManager* toolMgr = canvas_->toolManager();
+        Tool* tool = toolMgr->tool("mirror");
+        if (tool) {
+            MirrorTool* mirrorTool = dynamic_cast<MirrorTool*>(tool);
+            if (mirrorTool) {
+                mirrorTool->setSelectedHandles(selection);
+            }
+        }
+
+        // Activate the tool
+        toolMgr->activateTool("mirror");
+        canvas_->setCursor(Qt::CrossCursor);
+    }
+
     void onToolPromptChanged(const QString& prompt) {
         toolPromptLabel_->setText(prompt);
     }
@@ -558,7 +752,30 @@ private:
     QLabel* zoomLabel_;
     QLabel* snapModeLabel_;
     QLabel* selectionLabel_;
+    QLabel* validationLabel_ = nullptr;
     QLabel* toolPromptLabel_;
+
+    // Command history (undo/redo)
+    CommandHistory* commandHistory_;
+    QAction* undoAction_;
+    QAction* redoAction_;
+
+    // Validation UI
+     // Initialized in setupStatusBar
+
+    void updateValidationStatus() {
+        const auto& result = document_->validationResult();
+
+        if (result.passed()) {
+            validationLabel_->setText("✓ Valid");
+            validationLabel_->setStyleSheet("color: green; font-weight: bold;");
+            validationLabel_->setToolTip("Geometry is valid for manufacturing");
+        } else {
+            validationLabel_->setText(QString("⚠ Issues: %1").arg(result.issueCount()));
+            validationLabel_->setStyleSheet("color: red; font-weight: bold;");
+            validationLabel_->setToolTip(QString("Found %1 issues. Click 'Validate Geometry' for details.").arg(result.issueCount()));
+        }
+    }
 };
 
 int main(int argc, char* argv[]) {

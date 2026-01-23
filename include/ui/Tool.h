@@ -12,6 +12,7 @@ namespace OwnCAD {
 // Forward declarations
 namespace Model {
     class DocumentModel;
+    class CommandHistory;
 }
 
 namespace UI {
@@ -170,8 +171,15 @@ public:
      */
     void setDocumentModel(Model::DocumentModel* model) { documentModel_ = model; }
 
+    /**
+     * @brief Set the command history for undo/redo support
+     * @param history Pointer to command history (owned by application)
+     */
+    void setCommandHistory(Model::CommandHistory* history) { commandHistory_ = history; }
+
 protected:
     Model::DocumentModel* documentModel_ = nullptr;
+    Model::CommandHistory* commandHistory_ = nullptr;
 };
 
 } // namespace UI

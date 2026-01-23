@@ -1,8 +1,11 @@
 #include "ui/RectangleTool.h"
 #include "ui/CADCanvas.h"
 #include "model/DocumentModel.h"
+#include "model/CommandHistory.h"
+#include "model/EntityCommands.h"
 #include "geometry/Line2D.h"
 #include "geometry/GeometryConstants.h"
+#include "import/GeometryConverter.h"
 #include <QPen>
 #include <QBrush>
 #include <QDebug>
@@ -198,19 +201,42 @@ bool RectangleTool::commitRectangle() {
         return false;
     }
 
-    // Add all 4 lines to document
-    std::string h1 = documentModel_->addLine(*line1);
-    std::string h2 = documentModel_->addLine(*line2);
-    std::string h3 = documentModel_->addLine(*line3);
-    std::string h4 = documentModel_->addLine(*line4);
+    // Use command system if available (enables undo/redo)
+    if (commandHistory_) {
+        // Create batch of 4 lines as single undoable operation
+        std::vector<Import::GeometryEntity> entities;
+        entities.push_back(Import::GeometryEntity{*line1});
+        entities.push_back(Import::GeometryEntity{*line2});
+        entities.push_back(Import::GeometryEntity{*line3});
+        entities.push_back(Import::GeometryEntity{*line4});
 
-    if (h1.empty() || h2.empty() || h3.empty() || h4.empty()) {
-        qWarning() << "RectangleTool: Failed to add one or more lines to document";
-        return false;
+        auto command = std::make_unique<Model::CreateEntitiesCommand>(
+            documentModel_,
+            entities,
+            "0"  // default layer
+        );
+
+        if (!commandHistory_->executeCommand(std::move(command))) {
+            qWarning() << "RectangleTool: Failed to execute create command";
+            return false;
+        }
+        qDebug() << "RectangleTool: Created rectangle (4 lines) via command system"
+                 << "width=" << width << "height=" << height;
+    } else {
+        // Fallback: direct add (no undo support)
+        std::string h1 = documentModel_->addLine(*line1);
+        std::string h2 = documentModel_->addLine(*line2);
+        std::string h3 = documentModel_->addLine(*line3);
+        std::string h4 = documentModel_->addLine(*line4);
+
+        if (h1.empty() || h2.empty() || h3.empty() || h4.empty()) {
+            qWarning() << "RectangleTool: Failed to add one or more lines to document";
+            return false;
+        }
+        qDebug() << "RectangleTool: Created rectangle (4 lines)"
+                 << "width=" << width << "height=" << height;
     }
 
-    qDebug() << "RectangleTool: Created rectangle (4 lines)"
-             << "width=" << width << "height=" << height;
     return true;
 }
 

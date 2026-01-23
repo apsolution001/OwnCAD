@@ -507,6 +507,101 @@ double snapAngle(double angleRadians, double snapIncrement) noexcept {
     return std::round(angleRadians / snapIncrement) * snapIncrement;
 }
 
+// ============================================================================
+// MIRROR
+// ============================================================================
+
+Point2D mirror(const Point2D& point, const Point2D& axisP1, const Point2D& axisP2) noexcept {
+    // Axis direction vector
+    double dx = axisP2.x() - axisP1.x();
+    double dy = axisP2.y() - axisP1.y();
+    double lenSq = dx * dx + dy * dy;
+
+    if (lenSq < GEOMETRY_EPSILON * GEOMETRY_EPSILON) {
+        // Degenerate axis - return point unchanged
+        return point;
+    }
+
+    double len = std::sqrt(lenSq);
+    // Normalize direction
+    dx /= len;
+    dy /= len;
+
+    // Translate point relative to axisP1
+    double px = point.x() - axisP1.x();
+    double py = point.y() - axisP1.y();
+
+    // Project onto axis (along) and perpendicular
+    double proj = px * dx + py * dy;   // Scalar projection along axis
+    double perp = px * dy - py * dx;   // Perpendicular signed distance
+
+    // Reflect: negate perpendicular component
+    // Reconstruct: axisP1 + proj * axis_dir - perp * perp_dir
+    // perp_dir = (dy, -dx) for perpendicular to (dx, dy)
+    double mx = axisP1.x() + proj * dx - perp * dy;
+    double my = axisP1.y() + proj * dy + perp * dx;
+
+    return Point2D(mx, my);
+}
+
+std::optional<Line2D> mirror(const Line2D& line, const Point2D& axisP1, const Point2D& axisP2) noexcept {
+    Point2D newStart = mirror(line.start(), axisP1, axisP2);
+    Point2D newEnd = mirror(line.end(), axisP1, axisP2);
+    return Line2D::create(newStart, newEnd);
+}
+
+std::optional<Arc2D> mirror(const Arc2D& arc, const Point2D& axisP1, const Point2D& axisP2) noexcept {
+    // Mirror the center point
+    Point2D newCenter = mirror(arc.center(), axisP1, axisP2);
+
+    // Mirror the start and end points, then recalculate angles
+    Point2D startPt = arc.startPoint();
+    Point2D endPt = arc.endPoint();
+
+    Point2D newStartPt = mirror(startPt, axisP1, axisP2);
+    Point2D newEndPt = mirror(endPt, axisP1, axisP2);
+
+    // Calculate new angles from mirrored points
+    double newStartAngle = angleBetweenPoints(newCenter, newStartPt);
+    double newEndAngle = angleBetweenPoints(newCenter, newEndPt);
+
+    // CRITICAL: Mirror inverts arc direction!
+    // A CCW arc becomes CW, and vice versa.
+    // This is mathematically required and important for CNC toolpaths.
+    bool newDirection = !arc.isCounterClockwise();
+
+    return Arc2D::create(
+        newCenter,
+        arc.radius(),
+        newStartAngle,
+        newEndAngle,
+        newDirection
+    );
+}
+
+std::optional<Ellipse2D> mirror(const Ellipse2D& ellipse, const Point2D& axisP1, const Point2D& axisP2) noexcept {
+    // Mirror center and major axis endpoint
+    Point2D newCenter = mirror(ellipse.center(), axisP1, axisP2);
+    Point2D newMajorAxisEnd = mirror(ellipse.majorAxisEnd(), axisP1, axisP2);
+
+    // For ellipse mirroring, the angular direction reverses.
+    // Swap start/end angles and negate to reflect across the mirror axis.
+    double newStartAngle = -ellipse.endAngle();
+    double newEndAngle = -ellipse.startAngle();
+
+    // Normalize angles
+    newStartAngle = normalizeAngle(newStartAngle);
+    newEndAngle = normalizeAngle(newEndAngle);
+
+    return Ellipse2D::create(
+        newCenter,
+        newMajorAxisEnd,
+        ellipse.minorAxisRatio(),
+        newStartAngle,
+        newEndAngle
+    );
+}
+
 } // namespace GeometryMath
 } // namespace Geometry
 } // namespace OwnCAD

@@ -2,6 +2,9 @@
 #include "ui/LineTool.h"
 #include "ui/ArcTool.h"
 #include "ui/RectangleTool.h"
+#include "ui/MoveTool.h"
+#include "ui/RotateTool.h"
+#include "ui/MirrorTool.h"
 #include "geometry/GeometryConstants.h"
 #include "geometry/BoundingBox.h"
 #include "geometry/GeometryMath.h"
@@ -318,6 +321,9 @@ CADCanvas::CADCanvas(QWidget* parent)
     toolManager_->registerTool(std::make_unique<LineTool>());
     toolManager_->registerTool(std::make_unique<ArcTool>());
     toolManager_->registerTool(std::make_unique<RectangleTool>());
+    toolManager_->registerTool(std::make_unique<MoveTool>());
+    toolManager_->registerTool(std::make_unique<RotateTool>());
+    toolManager_->registerTool(std::make_unique<MirrorTool>());
 
     // Connect tool manager signals
     connect(toolManager_.get(), &ToolManager::geometryChanged, this, [this]() {
@@ -332,6 +338,10 @@ CADCanvas::~CADCanvas() {
 
 void CADCanvas::setDocumentModel(Model::DocumentModel* model) {
     toolManager_->setDocumentModel(model);
+}
+
+std::vector<std::string> CADCanvas::selectedHandles() const {
+    return selectionManager_.selectedHandles();
 }
 
 void CADCanvas::setEntities(const std::vector<Import::GeometryEntityWithMetadata>& entities) {

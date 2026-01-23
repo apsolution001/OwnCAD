@@ -192,6 +192,10 @@ public:
     ToolManager* toolManager() { return toolManager_.get(); }
     void setDocumentModel(Model::DocumentModel* model);
 
+    // Selection access (for transformation tools)
+    std::vector<std::string> selectedHandles() const;
+    size_t selectedCount() const { return selectionManager_.selectedCount(); }
+
 signals:
     void viewportChanged(double zoom, double panX, double panY);
     void cursorPositionChanged(double x, double y);

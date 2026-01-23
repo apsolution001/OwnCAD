@@ -22,6 +22,12 @@ Core geometric primitives and math utilities.
   - Intersection calculations: line-line, segment-segment, line-arc, arc-arc.
   - Projection/closest point: on segment, on arc, on ellipse.
 - `GeometryValidator.h/cpp`: Helper class for geometry validation checks.
+- `TransformValidator.h/cpp`: Validation utilities for geometric transformations.
+  - Validates precision preservation after translate/rotate operations.
+  - Detects cumulative drift from repeated transformations.
+  - Verifies arc direction (CCW/CW) is preserved (critical for CNC toolpaths).
+  - Round-trip validation: transform → inverse → compare to original.
+  - 360° rotation identity tests.
 
 ### Import/Export (`import/`)
 File format handling, currently focused on DXF.
@@ -69,6 +75,19 @@ User interface components and interaction logic.
   - Two-click workflow, creates 4 Line2D entities (not a special type).
   - Preview rendering with 4 dashed lines.
   - Continuous drawing mode, ESC to cancel.
+- `MoveTool.h/cpp`: Move tool implementation for translating entities.
+  - State machine: Inactive → WaitingForBasePoint → InProgress (Moving) → Commit.
+  - Workflow: Select entities → Activate → Click Base → Drag/Preview → Click Destination.
+  - Features: Snapping support, real-time preview of all selected entities, transaction safety.
+  - Uses `GeometryMath::translate` for actual geometry modification.
+- `RotateTool.h/cpp`: Rotate tool implementation for rotating entities around a center point.
+  - State machine: Inactive → WaitingForCenter → InProgress (WaitingForAngle) → Commit.
+  - Workflow: Select entities → Activate → Click Center → Drag/Preview → Click or Tab for angle.
+  - Features: Shift for 15° angle snap, Tab/Enter for exact numeric angle input dialog.
+  - Uses `GeometryMath::rotate` for actual geometry modification.
+- `RotateInputDialog.h/cpp`: Dialog for entering exact rotation angle in degrees.
+  - Allows numeric input for precise rotation (positive = CCW, negative = CW).
+  - Pre-fills with current preview angle when opened.
 
 ### Main
 - `src/main.cpp`: Application entry point; initializes `MainWindow` and the application loop.
@@ -76,8 +95,14 @@ User interface components and interaction logic.
   - MainWindow: menu bar, central CADCanvas, status bar with cursor position/zoom/snap/selection indicators.
 
 ## Tests (`tests/`)
-Unit tests using Google Test framework.
-- `tests/geometry/`: Tests for specific geometric primitives.
+Unit tests using Qt Test framework.
+- `tests/geometry/`: Tests for geometric primitives and utilities.
+  - `test_Point2D.cpp`: Point2D construction, equality, distance.
+  - `test_Line2D.cpp`: Line2D validation, length, containment.
+  - `test_Arc2D.cpp`: Arc2D angles, sweep, direction.
+  - `test_GeometryMath.cpp`: Distance, angle, tolerance utilities.
+  - `test_Intersections.cpp`: Line-line, line-arc, arc-arc intersections.
+  - `test_TransformValidator.cpp`: Transform precision, cumulative drift, round-trip validation.
 - `tests/ui/`: Tests for UI components (e.g., Viewport transformations).
 
 ## Tasks (`tasks/`)

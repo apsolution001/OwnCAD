@@ -95,14 +95,65 @@ void DocumentModel::runValidation() {
         return;
     }
 
-    // Convert entities to variant for validation
+    // Snapshot entities for validation
     auto entityVariants = getEntityVariants();
 
-    // Run validation with default tolerance
+    // Run validation synchronously
     validationResult_ = GeometryValidator::validateEntities(
         entityVariants,
         GEOMETRY_EPSILON
     );
+}
+
+void DocumentModel::runValidationAsync() {
+    if (isValidating_) {
+        return; // Already running
+    }
+
+    if (entities_.empty()) {
+        if (validationCallback_) {
+            validationCallback_(ValidationResult()); // Immediate empty result
+        }
+        return;
+    }
+
+    isValidating_ = true;
+
+    // Snapshot entities to pass to worker thread (thread safety: copy)
+    // Note: This copying happens on the calling thread (Main Thread usually)
+    auto entityVariants = getEntityVariants();
+
+    // Launch async task
+    validationFuture_ = std::async(std::launch::async, 
+        [this, variants = std::move(entityVariants)]() mutable {
+            // This runs in background thread
+            ValidationResult result = GeometryValidator::validateEntities(
+                variants,
+                GEOMETRY_EPSILON
+            );
+
+            // Notify completion
+            if (validationCallback_) {
+                validationCallback_(result);
+            }
+            
+            isValidating_ = false;
+        }
+    );
+}
+
+void DocumentModel::setValidationCompletionCallback(std::function<void(const Geometry::ValidationResult&)> callback) {
+    validationCallback_ = callback;
+}
+
+bool DocumentModel::isValidating() const {
+    return isValidating_;
+}
+
+void DocumentModel::finalizeValidation(const Geometry::ValidationResult& result) {
+    std::lock_guard<std::mutex> lock(validationMutex_);
+    validationResult_ = result;
+    calculateStatistics(); // Re-calculate stats based on new validation results
 }
 
 std::vector<std::variant<Line2D, Arc2D>> DocumentModel::getEntityVariants() const {
@@ -259,6 +310,156 @@ std::string DocumentModel::generateHandle() {
     char buffer[16];
     std::snprintf(buffer, sizeof(buffer), "E%05zu", nextHandleNumber_++);
     return std::string(buffer);
+}
+
+// ============================================================================
+// ENTITY MODIFICATION
+// ============================================================================
+
+GeometryEntityWithMetadata* DocumentModel::findEntityByHandle(const std::string& handle) {
+    for (auto& entity : entities_) {
+        if (entity.handle == handle) {
+            return &entity;
+        }
+    }
+    return nullptr;
+}
+
+const GeometryEntityWithMetadata* DocumentModel::findEntityByHandle(const std::string& handle) const {
+    for (const auto& entity : entities_) {
+        if (entity.handle == handle) {
+            return &entity;
+        }
+    }
+    return nullptr;
+}
+
+bool DocumentModel::updateEntity(const std::string& handle, const GeometryEntity& newGeometry) {
+    GeometryEntityWithMetadata* entity = findEntityByHandle(handle);
+    if (!entity) {
+        return false;
+    }
+
+    // Track old type for statistics update
+    bool wasLine = std::holds_alternative<Line2D>(entity->entity);
+    bool wasArc = std::holds_alternative<Arc2D>(entity->entity);
+
+    // Replace geometry (metadata preserved)
+    entity->entity = newGeometry;
+
+    // Track new type for statistics update
+    bool isLine = std::holds_alternative<Line2D>(newGeometry);
+    bool isArc = std::holds_alternative<Arc2D>(newGeometry);
+
+    // Update statistics if type changed
+    if (wasLine && !isLine) statistics_.totalLines--;
+    if (wasArc && !isArc) statistics_.totalArcs--;
+    if (!wasLine && isLine) statistics_.totalLines++;
+    if (!wasArc && isArc) statistics_.totalArcs++;
+
+    return true;
+}
+
+bool DocumentModel::removeEntity(const std::string& handle) {
+    auto it = std::find_if(entities_.begin(), entities_.end(),
+        [&handle](const GeometryEntityWithMetadata& e) {
+            return e.handle == handle;
+        });
+
+    if (it == entities_.end()) {
+        return false;
+    }
+
+    // Update statistics before removal
+    if (std::holds_alternative<Line2D>(it->entity)) {
+        statistics_.totalLines--;
+    } else if (std::holds_alternative<Arc2D>(it->entity)) {
+        statistics_.totalArcs--;
+    }
+    statistics_.totalSegments--;
+    statistics_.validEntities--;
+
+    // Remove entity
+    entities_.erase(it);
+
+    return true;
+}
+
+bool DocumentModel::restoreEntity(const GeometryEntityWithMetadata& entity) {
+    // Check for handle conflict - indicates a bug if this happens
+    if (findEntityByHandle(entity.handle) != nullptr) {
+        return false;
+    }
+
+    // Add entity back to collection
+    entities_.push_back(entity);
+
+    // Update statistics
+    std::visit([this](auto&& geom) {
+        using T = std::decay_t<decltype(geom)>;
+        if constexpr (std::is_same_v<T, Line2D>) {
+            statistics_.totalLines++;
+        } else if constexpr (std::is_same_v<T, Arc2D>) {
+            statistics_.totalArcs++;
+        }
+        // Ellipse2D and Point2D don't have separate counters
+    }, entity.entity);
+
+    statistics_.totalSegments++;
+    statistics_.validEntities++;
+
+    return true;
+}
+
+std::string DocumentModel::addEllipse(const Ellipse2D& ellipse, const std::string& layer) {
+    // Validate input
+    if (!ellipse.isValid()) {
+        return std::string();
+    }
+
+    // Generate handle
+    std::string handle = generateHandle();
+
+    // Create entity with metadata
+    GeometryEntityWithMetadata entityWithMeta{
+        ellipse,        // entity
+        layer,          // layer
+        handle,         // handle
+        256,            // colorNumber (BYLAYER)
+        0               // sourceLineNumber (not from file)
+    };
+
+    // Add to collection
+    entities_.push_back(entityWithMeta);
+
+    // Update statistics
+    statistics_.totalSegments++;
+    statistics_.validEntities++;
+
+    return handle;
+}
+
+std::string DocumentModel::addPoint(const Point2D& point, const std::string& layer) {
+    // Generate handle
+    std::string handle = generateHandle();
+
+    // Create entity with metadata
+    GeometryEntityWithMetadata entityWithMeta{
+        point,          // entity
+        layer,          // layer
+        handle,         // handle
+        256,            // colorNumber (BYLAYER)
+        0               // sourceLineNumber (not from file)
+    };
+
+    // Add to collection
+    entities_.push_back(entityWithMeta);
+
+    // Update statistics
+    statistics_.totalSegments++;
+    statistics_.validEntities++;
+
+    return handle;
 }
 
 } // namespace Model

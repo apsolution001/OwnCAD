@@ -340,6 +340,51 @@ std::optional<Ellipse2D> rotate(const Ellipse2D& ellipse, const Point2D& center,
  */
 double snapAngle(double angleRadians, double snapIncrement) noexcept;
 
+// ============================================================================
+// MIRROR (for transformation tools)
+// ============================================================================
+
+/**
+ * @brief Mirror a point across an axis defined by two points
+ * @param point Point to mirror
+ * @param axisP1 First point on mirror axis
+ * @param axisP2 Second point on mirror axis
+ * @return Mirrored point
+ *
+ * The axis is the infinite line passing through axisP1 and axisP2.
+ */
+Point2D mirror(const Point2D& point, const Point2D& axisP1, const Point2D& axisP2) noexcept;
+
+/**
+ * @brief Mirror a line across an axis
+ * @param line Line to mirror
+ * @param axisP1 First point on mirror axis
+ * @param axisP2 Second point on mirror axis
+ * @return Mirrored line, or nullopt if axis is degenerate
+ */
+std::optional<Line2D> mirror(const Line2D& line, const Point2D& axisP1, const Point2D& axisP2) noexcept;
+
+/**
+ * @brief Mirror an arc across an axis
+ * @param arc Arc to mirror
+ * @param axisP1 First point on mirror axis
+ * @param axisP2 Second point on mirror axis
+ * @return Mirrored arc with INVERTED direction, or nullopt if invalid
+ *
+ * IMPORTANT: Mirror operation inverts arc direction (CCW <-> CW).
+ * This is mathematically correct and critical for CNC toolpaths.
+ */
+std::optional<Arc2D> mirror(const Arc2D& arc, const Point2D& axisP1, const Point2D& axisP2) noexcept;
+
+/**
+ * @brief Mirror an ellipse across an axis
+ * @param ellipse Ellipse to mirror
+ * @param axisP1 First point on mirror axis
+ * @param axisP2 Second point on mirror axis
+ * @return Mirrored ellipse, or nullopt if invalid
+ */
+std::optional<Ellipse2D> mirror(const Ellipse2D& ellipse, const Point2D& axisP1, const Point2D& axisP2) noexcept;
+
 } // namespace GeometryMath
 } // namespace Geometry
 } // namespace OwnCAD

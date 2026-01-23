@@ -5,6 +5,10 @@
 #include <vector>
 #include <string>
 #include <memory>
+#include <future>
+#include <atomic>
+#include <functional>
+#include <mutex>
 
 namespace OwnCAD {
 namespace Model {
@@ -150,6 +154,85 @@ public:
      */
     std::string generateHandle();
 
+    // =========================================================================
+    // ENTITY MODIFICATION (for transformation tools)
+    // =========================================================================
+
+    /**
+     * @brief Find entity by handle
+     * @param handle Entity handle string
+     * @return Pointer to entity, nullptr if not found
+     */
+    Import::GeometryEntityWithMetadata* findEntityByHandle(const std::string& handle);
+    const Import::GeometryEntityWithMetadata* findEntityByHandle(const std::string& handle) const;
+
+    /**
+     * @brief Update entity geometry (preserves metadata)
+     * @param handle Entity handle
+     * @param newGeometry New geometry to replace existing
+     * @return true if entity found and updated
+     */
+    bool updateEntity(const std::string& handle, const Import::GeometryEntity& newGeometry);
+
+    /**
+     * @brief Remove entity from document
+     * @param handle Entity handle
+     * @return true if entity found and removed
+     */
+    bool removeEntity(const std::string& handle);
+
+    /**
+     * @brief Restore a previously removed entity (for undo support)
+     * @param entity Complete entity with metadata (handle, layer, color, etc.)
+     * @return true if restored successfully, false if handle conflict exists
+     *
+     * This method reuses the original handle. If an entity with the same
+     * handle already exists, the operation fails (indicates a bug in
+     * command undo/redo logic).
+     */
+    bool restoreEntity(const Import::GeometryEntityWithMetadata& entity);
+
+    /**
+     * @brief Add an ellipse entity to the document
+     * @param ellipse Valid Ellipse2D geometry
+     * @param layer Target layer (default: "0")
+     * @return Generated handle string, empty on failure
+     */
+    std::string addEllipse(const Geometry::Ellipse2D& ellipse, const std::string& layer = "0");
+
+    /**
+     * @brief Add a point entity to the document
+     * @param point Valid Point2D geometry
+     * @param layer Target layer (default: "0")
+     * @return Generated handle string, empty on failure
+     */
+    std::string addPoint(const Geometry::Point2D& point, const std::string& layer = "0");
+
+    /**
+     * @brief Run validation asynchronously (non-blocking)
+     *
+     * Spawns a background task to validate all entities.
+     * When complete, updates validationResult and calls the completion callback.
+     */
+    void runValidationAsync();
+
+    /**
+     * @brief Set callback to be notified when validation completes
+     * @param callback Function to call (NOTE: may be called from background thread)
+     */
+    void setValidationCompletionCallback(std::function<void(const Geometry::ValidationResult&)> callback);
+
+    /**
+     * @brief Apply validation result and update statistics (Main Thread Only)
+     * @param result Result computed by async validator
+     */
+    void finalizeValidation(const Geometry::ValidationResult& result);
+
+    /**
+     * @brief Check if validation is currently running
+     */
+    bool isValidating() const;
+
 private:
     /**
      * @brief Run validation on all entities
@@ -170,6 +253,7 @@ private:
     // Data members
     std::vector<Import::GeometryEntityWithMetadata> entities_;
     Geometry::ValidationResult validationResult_;
+    mutable std::mutex validationMutex_; // Protect validationResult_ access
     DocumentStatistics statistics_;
     std::string filePath_;
     std::vector<std::string> importErrors_;
@@ -177,6 +261,11 @@ private:
 
     // Handle generation
     size_t nextHandleNumber_ = 1;
+
+    // Async validation
+    std::future<void> validationFuture_;
+    std::atomic<bool> isValidating_{false};
+    std::function<void(const Geometry::ValidationResult&)> validationCallback_;
 };
 
 } // namespace Model

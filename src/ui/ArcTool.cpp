@@ -1,7 +1,10 @@
 #include "ui/ArcTool.h"
 #include "ui/CADCanvas.h"
 #include "model/DocumentModel.h"
+#include "model/CommandHistory.h"
+#include "model/EntityCommands.h"
 #include "geometry/GeometryConstants.h"
+#include "import/GeometryConverter.h"
 #include <QPen>
 #include <QBrush>
 #include <QPainterPath>
@@ -366,17 +369,35 @@ bool ArcTool::commitArc() {
         return false;
     }
 
-    // Add to document
-    std::string handle = documentModel_->addArc(*arc);
-    if (handle.empty()) {
-        qWarning() << "ArcTool: Failed to add arc to document";
-        return false;
+    // Use command system if available (enables undo/redo)
+    if (commandHistory_) {
+        auto command = std::make_unique<Model::CreateEntityCommand>(
+            documentModel_,
+            Import::GeometryEntity{*arc},
+            "0"  // default layer
+        );
+
+        if (!commandHistory_->executeCommand(std::move(command))) {
+            qWarning() << "ArcTool: Failed to execute create command";
+            return false;
+        }
+        qDebug() << "ArcTool: Created arc via command system"
+                 << "radius=" << radius_
+                 << "sweep=" << (sweepAngle * 180.0 / Geometry::PI) << "deg"
+                 << (counterClockwise_ ? "CCW" : "CW");
+    } else {
+        // Fallback: direct add (no undo support)
+        std::string handle = documentModel_->addArc(*arc);
+        if (handle.empty()) {
+            qWarning() << "ArcTool: Failed to add arc to document";
+            return false;
+        }
+        qDebug() << "ArcTool: Created arc with handle" << QString::fromStdString(handle)
+                 << "radius=" << radius_
+                 << "sweep=" << (sweepAngle * 180.0 / Geometry::PI) << "deg"
+                 << (counterClockwise_ ? "CCW" : "CW");
     }
 
-    qDebug() << "ArcTool: Created arc with handle" << QString::fromStdString(handle)
-             << "radius=" << radius_
-             << "sweep=" << (sweepAngle * 180.0 / Geometry::PI) << "deg"
-             << (counterClockwise_ ? "CCW" : "CW");
     return true;
 }
 

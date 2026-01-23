@@ -61,6 +61,7 @@ set(GEOMETRY_HEADERS
     include/geometry/GeometryMath.h
     include/geometry/GeometryValidator.h
     include/geometry/GeometryConstants.h
+    include/geometry/TransformValidator.h
 )
 
 set(GEOMETRY_SOURCES
@@ -71,6 +72,7 @@ set(GEOMETRY_SOURCES
     src/geometry/BoundingBox.cpp
     src/geometry/GeometryMath.cpp
     src/geometry/GeometryValidator.cpp
+    src/geometry/TransformValidator.cpp
 )
 
 add_library(geometry STATIC
@@ -124,10 +126,15 @@ target_include_directories(import PUBLIC
 
 set(MODEL_HEADERS
     include/model/DocumentModel.h
+    include/model/Command.h
+    include/model/CommandHistory.h
+    include/model/EntityCommands.h
 )
 
 set(MODEL_SOURCES
     src/model/DocumentModel.cpp
+    src/model/CommandHistory.cpp
+    src/model/EntityCommands.cpp
 )
 
 add_library(model STATIC
@@ -158,6 +165,10 @@ set(UI_HEADERS
     include/ui/LineTool.h
     include/ui/ArcTool.h
     include/ui/RectangleTool.h
+    include/ui/MoveTool.h
+    include/ui/RotateTool.h
+    include/ui/RotateInputDialog.h
+    include/ui/MirrorTool.h
 )
 
 set(UI_SOURCES
@@ -168,6 +179,10 @@ set(UI_SOURCES
     src/ui/LineTool.cpp
     src/ui/ArcTool.cpp
     src/ui/RectangleTool.cpp
+    src/ui/MoveTool.cpp
+    src/ui/RotateTool.cpp
+    src/ui/RotateInputDialog.cpp
+    src/ui/MirrorTool.cpp
 )
 
 add_library(ui STATIC
@@ -237,6 +252,31 @@ add_geometry_test(test_Line2D tests/geometry/test_Line2D.cpp)
 add_geometry_test(test_Arc2D tests/geometry/test_Arc2D.cpp)
 add_geometry_test(test_GeometryMath tests/geometry/test_GeometryMath.cpp)
 add_geometry_test(test_Intersections tests/geometry/test_Intersections.cpp)
+add_geometry_test(test_TransformValidator tests/geometry/test_TransformValidator.cpp)
+add_geometry_test(test_DuplicateDetection tests/geometry/test_DuplicateDetection.cpp)
+
+# Helper function for model tests
+function(add_model_test test_name test_file)
+    add_executable(${test_name}
+        ${test_file}
+    )
+
+    target_link_libraries(${test_name}
+        Qt6::Test
+        Qt6::Core
+        geometry
+        model
+        import
+    )
+
+    add_test(NAME ${test_name} COMMAND ${test_name})
+endfunction()
+
+# Model tests
+add_model_test(test_CommandHistory tests/model/test_CommandHistory.cpp)
+add_model_test(test_EntityCommands tests/model/test_EntityCommands.cpp)
+add_model_test(test_UndoRedoStress tests/model/test_UndoRedoStress.cpp)
+
 
 # ============================================================================
 # INSTALLATION

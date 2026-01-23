@@ -10,6 +10,7 @@ namespace OwnCAD {
 
 namespace Model {
     class DocumentModel;
+    class CommandHistory;
 }
 
 namespace UI {
@@ -50,6 +51,12 @@ public:
      * @param model Document model pointer
      */
     void setDocumentModel(Model::DocumentModel* model);
+
+    /**
+     * @brief Set command history for all tools (enables undo/redo)
+     * @param history Command history pointer
+     */
+    void setCommandHistory(Model::CommandHistory* history);
 
     /**
      * @brief Activate a tool by ID
@@ -148,6 +155,7 @@ private:
     std::unordered_map<QString, std::unique_ptr<Tool>> tools_;
     Tool* activeTool_ = nullptr;
     Model::DocumentModel* documentModel_ = nullptr;
+    Model::CommandHistory* commandHistory_ = nullptr;
 
     void updateStatusPrompt();
 };

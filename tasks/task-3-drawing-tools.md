@@ -1,4 +1,21 @@
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # Task 3: Drawing Tools - Implementation Guide
 
 ## Overview
