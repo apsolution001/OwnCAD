@@ -39,6 +39,19 @@ File format handling, currently focused on DXF.
 ### Model (`model/`)
 Data management and application state.
 - `DocumentModel.h/cpp`: Manages the collection of all geometric entities in the active document.
+- `Command.h`: Interface for the Command pattern (Undo/Redo support).
+  - Pure virtual methods: `execute()`, `undo()`, `redo()`.
+  - Properties: `name()`, `mergeId()`, `canMergeWith()`.
+- `EntityCommands.h/cpp`: Concrete implementations of `Command` for entity operations.
+  - `CreateEntityCommand`: Adds a single primitive (Line, Arc, etc.).
+  - `CreateEntitiesCommand`: Adds multiple entities (e.g., Rectangle).
+  - `DeleteEntityCommand` / `DeleteEntitiesCommand`: Removes entities.
+  - `MoveEntitiesCommand`: Translates entities.
+  - `RotateEntitiesCommand`: Rotates entities.
+  - `MirrorEntitiesCommand`: Mirrors entities.
+- `CommandHistory.h/cpp`: Manages the undo/redo stacks.
+  - Stores unique_ptr to executed commands.
+  - Handles stack limits and state notifications.
 
 ### UI (`ui/`)
 User interface components and interaction logic.
@@ -88,6 +101,10 @@ User interface components and interaction logic.
 - `RotateInputDialog.h/cpp`: Dialog for entering exact rotation angle in degrees.
   - Allows numeric input for precise rotation (positive = CCW, negative = CW).
   - Pre-fills with current preview angle when opened.
+- `MirrorTool.h/cpp`: Mirror tool implementation.
+  - State machine: Inactive → WaitingForSelection → WaitingForAxisStart → WaitingForAxisEnd → Commit.
+  - Workflow: Select entities → Activate → Click Axis Points (or X/Y keys).
+  - Features: Previewing mirrored geometry, toggle keep original (Tab), X/Y axis shortcuts.
 
 ### Main
 - `src/main.cpp`: Application entry point; initializes `MainWindow` and the application loop.
