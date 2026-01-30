@@ -167,6 +167,13 @@ public:
     const Import::GeometryEntityWithMetadata* findEntityByHandle(const std::string& handle) const;
 
     /**
+     * @brief Get index of entity by handle
+     * @param handle Entity handle string
+     * @return Index in entities_ vector, or std::nullopt if not found
+     */
+    std::optional<size_t> findEntityIndexByHandle(const std::string& handle) const;
+
+    /**
      * @brief Update entity geometry (preserves metadata)
      * @param handle Entity handle
      * @param newGeometry New geometry to replace existing
@@ -191,6 +198,14 @@ public:
      * command undo/redo logic).
      */
     bool restoreEntity(const Import::GeometryEntityWithMetadata& entity);
+
+    /**
+     * @brief Restore a previously removed entity at a specific index (for undo support)
+     * @param entity Complete entity with metadata
+     * @param index Original index in the entities vector
+     * @return true if restored successfully
+     */
+    bool restoreEntityAtIndex(const Import::GeometryEntityWithMetadata& entity, size_t index);
 
     /**
      * @brief Add an ellipse entity to the document
@@ -233,6 +248,34 @@ public:
      */
     bool isValidating() const;
 
+    // =========================================================================
+    // DXF EXPORT
+    // =========================================================================
+
+    /**
+     * @brief Export document to DXF file
+     * @param filePath Output DXF file path
+     * @return true if successful, false on error
+     *
+     * Exports all entities with preserved metadata (handles, layers, colors).
+     * Uses GeometryExporter and DXFWriter for conversion.
+     */
+    bool exportDXFFile(const std::string& filePath) const;
+
+    /**
+     * @brief Get export errors from last export operation
+     */
+    const std::vector<std::string>& exportErrors() const noexcept;
+
+    /**
+     * @brief Update next handle number by scanning existing entities
+     *
+     * Should be called after importing a DXF to avoid handle conflicts.
+     * Scans all entities and sets nextHandleNumber_ to max(handle) + 1.
+     * Handles both decimal ("E00001") and hex formats.
+     */
+    void updateNextHandleNumber();
+
 private:
     /**
      * @brief Run validation on all entities
@@ -250,6 +293,11 @@ private:
     std::vector<std::variant<Geometry::Line2D, Geometry::Arc2D>>
         getEntityVariants() const;
 
+    /**
+     * @brief Extract entity handles (parallel to getEntityVariants)
+     */
+    std::vector<std::string> getEntityHandles() const;
+
     // Data members
     std::vector<Import::GeometryEntityWithMetadata> entities_;
     Geometry::ValidationResult validationResult_;
@@ -258,6 +306,7 @@ private:
     std::string filePath_;
     std::vector<std::string> importErrors_;
     std::vector<std::string> importWarnings_;
+    mutable std::vector<std::string> exportErrors_;
 
     // Handle generation
     size_t nextHandleNumber_ = 1;

@@ -1,5 +1,7 @@
 #include "model/DocumentModel.h"
 #include "import/DXFParser.h"
+#include "export/GeometryExporter.h"
+#include "export/DXFWriter.h"
 #include "geometry/GeometryConstants.h"
 #include <algorithm>
 #include <set>
@@ -73,6 +75,9 @@ bool DocumentModel::loadDXFFile(const std::string& filePath) {
     // Step 4: Calculate statistics
     calculateStatistics();
 
+    // Step 5: Update handle generator to avoid conflicts with imported handles
+    updateNextHandleNumber();
+
     return !entities_.empty();
 }
 
@@ -95,12 +100,14 @@ void DocumentModel::runValidation() {
         return;
     }
 
-    // Snapshot entities for validation
+    // Snapshot entities and handles for validation
     auto entityVariants = getEntityVariants();
+    auto handles = getEntityHandles();
 
-    // Run validation synchronously
-    validationResult_ = GeometryValidator::validateEntities(
+    // Run validation synchronously with handle tracking
+    validationResult_ = GeometryValidator::validateEntitiesWithHandles(
         entityVariants,
+        handles,
         GEOMETRY_EPSILON
     );
 }
@@ -119,16 +126,18 @@ void DocumentModel::runValidationAsync() {
 
     isValidating_ = true;
 
-    // Snapshot entities to pass to worker thread (thread safety: copy)
+    // Snapshot entities and handles to pass to worker thread (thread safety: copy)
     // Note: This copying happens on the calling thread (Main Thread usually)
     auto entityVariants = getEntityVariants();
+    auto handles = getEntityHandles();
 
     // Launch async task
-    validationFuture_ = std::async(std::launch::async, 
-        [this, variants = std::move(entityVariants)]() mutable {
+    validationFuture_ = std::async(std::launch::async,
+        [this, variants = std::move(entityVariants), hdls = std::move(handles)]() mutable {
             // This runs in background thread
-            ValidationResult result = GeometryValidator::validateEntities(
+            ValidationResult result = GeometryValidator::validateEntitiesWithHandles(
                 variants,
+                hdls,
                 GEOMETRY_EPSILON
             );
 
@@ -136,7 +145,7 @@ void DocumentModel::runValidationAsync() {
             if (validationCallback_) {
                 validationCallback_(result);
             }
-            
+
             isValidating_ = false;
         }
     );
@@ -172,6 +181,23 @@ std::vector<std::variant<Line2D, Arc2D>> DocumentModel::getEntityVariants() cons
     }
 
     return variants;
+}
+
+std::vector<std::string> DocumentModel::getEntityHandles() const {
+    std::vector<std::string> handles;
+    handles.reserve(entities_.size());
+
+    for (const auto& entityWithMeta : entities_) {
+        // Only extract handles for Line2D and Arc2D (parallel to getEntityVariants)
+        // Must maintain same order as getEntityVariants() for correct mapping
+        if (std::holds_alternative<Line2D>(entityWithMeta.entity) ||
+            std::holds_alternative<Arc2D>(entityWithMeta.entity)) {
+            handles.push_back(entityWithMeta.handle);
+        }
+        // Skip Ellipse2D and Point2D for now (no validator yet)
+    }
+
+    return handles;
 }
 
 // ============================================================================
@@ -306,10 +332,19 @@ std::string DocumentModel::addArc(const Arc2D& arc, const std::string& layer) {
 }
 
 std::string DocumentModel::generateHandle() {
-    // Generate handle in format "E00001", "E00002", etc.
+    // Generate handle in hex format (standard for DXF)
     char buffer[16];
-    std::snprintf(buffer, sizeof(buffer), "E%05zu", nextHandleNumber_++);
+    std::snprintf(buffer, sizeof(buffer), "%zX", nextHandleNumber_++);
     return std::string(buffer);
+}
+
+std::optional<size_t> DocumentModel::findEntityIndexByHandle(const std::string& handle) const {
+    for (size_t i = 0; i < entities_.size(); ++i) {
+        if (entities_[i].handle == handle) {
+            return i;
+        }
+    }
+    return std::nullopt;
 }
 
 // ============================================================================
@@ -385,14 +420,24 @@ bool DocumentModel::removeEntity(const std::string& handle) {
     return true;
 }
 
-bool DocumentModel::restoreEntity(const GeometryEntityWithMetadata& entity) {
+bool DocumentModel::restoreEntity(const Import::GeometryEntityWithMetadata& entity) {
+    // Re-use restoreEntityAtIndex logic at the end of the collection
+    return restoreEntityAtIndex(entity, entities_.size());
+}
+
+bool DocumentModel::restoreEntityAtIndex(const Import::GeometryEntityWithMetadata& entity, size_t index) {
     // Check for handle conflict - indicates a bug if this happens
     if (findEntityByHandle(entity.handle) != nullptr) {
         return false;
     }
 
-    // Add entity back to collection
-    entities_.push_back(entity);
+    // Clamp index to valid range
+    if (index > entities_.size()) {
+        index = entities_.size();
+    }
+
+    // Add entity back to collection at original position
+    entities_.insert(entities_.begin() + index, entity);
 
     // Update statistics
     std::visit([this](auto&& geom) {
@@ -402,7 +447,6 @@ bool DocumentModel::restoreEntity(const GeometryEntityWithMetadata& entity) {
         } else if constexpr (std::is_same_v<T, Arc2D>) {
             statistics_.totalArcs++;
         }
-        // Ellipse2D and Point2D don't have separate counters
     }, entity.entity);
 
     statistics_.totalSegments++;
@@ -460,6 +504,66 @@ std::string DocumentModel::addPoint(const Point2D& point, const std::string& lay
     statistics_.validEntities++;
 
     return handle;
+}
+
+// ============================================================================
+// DXF EXPORT
+// ============================================================================
+
+bool DocumentModel::exportDXFFile(const std::string& filePath) const {
+    exportErrors_.clear();
+
+    // Step 1: Convert internal geometry to DXF entities
+    Export::ExportResult exportResult = Export::GeometryExporter::exportToDXF(entities_);
+
+    if (!exportResult.success || !exportResult.errors.empty()) {
+        exportErrors_ = exportResult.errors;
+        return false;
+    }
+
+    // Step 2: Write DXF entities to file
+    bool writeSuccess = Export::DXFWriter::writeFile(filePath, exportResult.entities);
+
+    if (!writeSuccess) {
+        exportErrors_.push_back("Failed to write DXF file: " + filePath);
+        return false;
+    }
+
+    return true;
+}
+
+const std::vector<std::string>& DocumentModel::exportErrors() const noexcept {
+    return exportErrors_;
+}
+
+void DocumentModel::updateNextHandleNumber() {
+    size_t maxHandle = 0;
+
+    for (const auto& entity : entities_) {
+        if (entity.handle.empty()) continue;
+
+        try {
+            size_t val = 0;
+            if (entity.handle.length() > 1 && entity.handle[0] == 'E') {
+                // Legacy decimal format "E00001"
+                val = std::stoull(entity.handle.substr(1));
+            } else {
+                // Standard hex format
+                val = std::stoull(entity.handle, nullptr, 16);
+            }
+
+            if (val > maxHandle) {
+                maxHandle = val;
+            }
+        } catch (...) {
+            // Non-numeric handle, skip
+        }
+    }
+
+    // Ensure next handle is greater than any existing handle
+    if (maxHandle >= nextHandleNumber_) {
+        nextHandleNumber_ = maxHandle + 1;
+    }
 }
 
 } // namespace Model

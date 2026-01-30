@@ -105,6 +105,7 @@ public:
 private:
     std::string m_handle;
     std::optional<Import::GeometryEntityWithMetadata> m_savedEntity;
+    size_t m_originalIndex = 0;  // Saved during execute() for undo()
 };
 
 // =============================================================================
@@ -134,6 +135,7 @@ public:
 private:
     std::vector<std::string> m_handles;
     std::vector<Import::GeometryEntityWithMetadata> m_savedEntities;
+    std::vector<size_t> m_originalIndices;  // Saved during execute() for undo()
 };
 
 // =============================================================================

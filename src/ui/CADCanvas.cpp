@@ -344,6 +344,12 @@ std::vector<std::string> CADCanvas::selectedHandles() const {
     return selectionManager_.selectedHandles();
 }
 
+void CADCanvas::clearSelection() {
+    selectionManager_.clear();
+    emit selectionChanged(0);
+    update();
+}
+
 void CADCanvas::setEntities(const std::vector<Import::GeometryEntityWithMetadata>& entities) {
     entities_ = entities;
 
@@ -399,6 +405,11 @@ void CADCanvas::setSnapEnabled(SnapManager::SnapMode mode, bool enabled) {
 
 bool CADCanvas::isSnapEnabled(SnapManager::SnapMode mode) const {
     return snapManager_.isSnapEnabled(mode);
+}
+
+void CADCanvas::setProblematicEntities(const std::set<std::string>& handles) {
+    problematicEntityHandles_ = handles;
+    update();  // Trigger repaint to show highlights
 }
 
 void CADCanvas::resetView() {
@@ -604,14 +615,20 @@ void CADCanvas::renderLine(QPainter& painter, const Geometry::Line2D& line, cons
     QPointF p1 = viewport_.worldToScreen(line.start());
     QPointF p2 = viewport_.worldToScreen(line.end());
 
-    // Get color from DXF
+    // Determine color and width based on entity state
     QColor color;
     int width = 2;
 
     if (selectionManager_.isSelected(metadata.handle)) {
+        // Selected entities: Blue (highest priority)
         color = QColor(0, 102, 255); // Blue #0066FF
         width = 3;
+    } else if (problematicEntityHandles_.find(metadata.handle) != problematicEntityHandles_.end()) {
+        // Problematic entities: Muted yellow (validation warning)
+        color = QColor(255, 221, 102); // Yellow #FFDD66
+        width = 2;
     } else {
+        // Normal entities: Original DXF color
         color = Import::DXFColors::toQColor(metadata.colorNumber, QColor(0, 0, 0));
     }
 
@@ -620,14 +637,20 @@ void CADCanvas::renderLine(QPainter& painter, const Geometry::Line2D& line, cons
 }
 
 void CADCanvas::renderArc(QPainter& painter, const Geometry::Arc2D& arc, const Import::GeometryEntityWithMetadata& metadata) {
-    // Get color from DXF
+    // Determine color and width based on entity state
     QColor color;
     int width = 2;
 
     if (selectionManager_.isSelected(metadata.handle)) {
+        // Selected entities: Blue (highest priority)
         color = QColor(0, 102, 255); // Blue #0066FF
         width = 3;
+    } else if (problematicEntityHandles_.find(metadata.handle) != problematicEntityHandles_.end()) {
+        // Problematic entities: Muted yellow (validation warning)
+        color = QColor(255, 221, 102); // Yellow #FFDD66
+        width = 2;
     } else {
+        // Normal entities: Original DXF color
         color = Import::DXFColors::toQColor(metadata.colorNumber, QColor(0, 0, 0));
     }
 
@@ -657,14 +680,20 @@ void CADCanvas::renderArc(QPainter& painter, const Geometry::Arc2D& arc, const I
 }
 
 void CADCanvas::renderEllipse(QPainter& painter, const Geometry::Ellipse2D& ellipse, const Import::GeometryEntityWithMetadata& metadata) {
-    // Get color from DXF
+    // Determine color and width based on entity state
     QColor color;
     int width = 2;
 
     if (selectionManager_.isSelected(metadata.handle)) {
+        // Selected entities: Blue (highest priority)
         color = QColor(0, 102, 255); // Blue #0066FF
         width = 3;
+    } else if (problematicEntityHandles_.find(metadata.handle) != problematicEntityHandles_.end()) {
+        // Problematic entities: Muted yellow (validation warning)
+        color = QColor(255, 221, 102); // Yellow #FFDD66
+        width = 2;
     } else {
+        // Normal entities: Original DXF color
         color = Import::DXFColors::toQColor(metadata.colorNumber, QColor(0, 0, 0));
     }
 
@@ -695,14 +724,20 @@ void CADCanvas::renderEllipse(QPainter& painter, const Geometry::Ellipse2D& elli
 void CADCanvas::renderPoint(QPainter& painter, const Geometry::Point2D& point, const Import::GeometryEntityWithMetadata& metadata) {
     QPointF screenPt = viewport_.worldToScreen(point);
 
-    // Get color from DXF
+    // Determine color and size based on entity state
     QColor color;
     int size = 4;  // Point marker size in pixels
 
     if (selectionManager_.isSelected(metadata.handle)) {
+        // Selected entities: Blue (highest priority)
         color = QColor(0, 102, 255); // Blue #0066FF
         size = 6;
+    } else if (problematicEntityHandles_.find(metadata.handle) != problematicEntityHandles_.end()) {
+        // Problematic entities: Muted yellow (validation warning)
+        color = QColor(255, 221, 102); // Yellow #FFDD66
+        size = 4;
     } else {
+        // Normal entities: Original DXF color
         color = Import::DXFColors::toQColor(metadata.colorNumber, QColor(0, 0, 0));
     }
 

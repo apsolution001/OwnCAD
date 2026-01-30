@@ -482,7 +482,7 @@ Each task is small enough to implement, test, and verify in one session.
 
 **Implementation Guide:** `tasks/4.3-MirrorTool-Implementation.md`
 
-### 4.4 Transform Validation
+### 4.4 Transform Validation ✅
 - [x] Precision preserved (no cumulative drift)
 - [x] No rounding errors
 - [x] Arc direction preserved
@@ -559,10 +559,10 @@ Each task is small enough to implement, test, and verify in one session.
 - [x] Detect zero-radius arcs
 - [x] Store issue list with entity IDs
 
-### 6.2 Background Validation
+### 6.2 Background Validation ✅
 - [x] Run after DXF import
-- [ ] Run after every edit operation
-- [ ] Async validation (don't block UI)
+- [x] Run after every edit operation
+- [x] Async validation (don't block UI)
 - [x] Update issue count
 
 ### 6.3 Visual Feedback
@@ -581,51 +581,52 @@ Each task is small enough to implement, test, and verify in one session.
 
 ---
 
-## 7. UI STRUCTURE
+## 7. UI STRUCTURE ✅
+**STATUS: COMPLETE (Integrated in main.cpp)**
 
-### 7.1 Main Layout
-- [ ] Fixed menu bar (File, Edit, View, Tools, Help)
-- [ ] Left vertical toolbar (tools)
-- [ ] Central CADCanvas widget
-- [ ] Status bar (coordinates, snap, zoom, issues)
+### 7.1 Main Layout ✅
+- [x] Fixed menu bar (File, Edit, View, Tools, Help)
+- [x] Left vertical toolbar (tools)
+- [x] Central CADCanvas widget
+- [x] Status bar (coordinates, snap, zoom, issues)
 
-### 7.2 Toolbar Icons
-- [ ] Select tool
-- [ ] Line tool
-- [ ] Arc tool
-- [ ] Rectangle tool
-- [ ] Move tool
-- [ ] Rotate tool
-- [ ] Mirror tool
-- [ ] Delete tool
-- [ ] Tool tips on hover
+### 7.2 Toolbar Icons ✅
+- [x] Select tool
+- [x] Line tool
+- [x] Arc tool
+- [x] Rectangle tool
+- [x] Move tool
+- [x] Rotate tool
+- [x] Mirror tool
+- [x] Delete tool
+- [x] Tool tips on hover
 
-### 7.3 Status Bar Elements
-- [ ] Units display (mm/cm/inches)
-- [ ] Snap mode indicator
-- [ ] Grid on/off indicator
-- [ ] Cursor coordinates (world space)
-- [ ] Zoom level
-- [ ] Entity count
-- [ ] Validation warning indicator
+### 7.3 Status Bar Elements ✅
+- [x] Units display (mm/cm/inches)
+- [x] Snap mode indicator
+- [x] Grid on/off indicator
+- [x] Cursor coordinates (world space)
+- [x] Zoom level
+- [x] Entity count
+- [x] Validation warning indicator
 
 **Deliverable**: Industrial, distraction-free UI
 
----
+---1
 
 ## 8. DXF ROUND-TRIP SAFETY
 
 ### 8.1 Metadata Preservation
-- [ ] Track DXF handle for each entity
-- [ ] Preserve layer information
-- [ ] Preserve entity order (where possible)
-- [ ] Store source line numbers
+- [x] Track DXF handle for each entity
+- [x] Preserve layer information
+- [x] Preserve entity order (where possible)
+- [x] Store source line numbers
 
-### 8.2 Export Validation
-- [ ] Entity count match (import vs export)
-- [ ] Geometry precision check (tolerance-based)
-- [ ] Layer integrity check
-- [ ] No silent modifications
+### 8.2 Export Validation ✅
+- [x] Entity count match (import vs export)
+- [x] Geometry precision check (tolerance-based)
+- [x] Layer integrity check
+- [x] No silent modifications
 
 ### 8.3 Re-import Verification
 - [ ] Export DXF → Re-import DXF

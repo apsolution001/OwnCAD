@@ -14,6 +14,7 @@
 #include <vector>
 #include <optional>
 #include <memory>
+#include <set>
 
 namespace OwnCAD {
 namespace UI {
@@ -195,6 +196,10 @@ public:
     // Selection access (for transformation tools)
     std::vector<std::string> selectedHandles() const;
     size_t selectedCount() const { return selectionManager_.selectedCount(); }
+    void clearSelection();
+
+    // Validation issue highlighting
+    void setProblematicEntities(const std::set<std::string>& handles);
 
 signals:
     void viewportChanged(double zoom, double panX, double panY);
@@ -241,6 +246,9 @@ private:
 
     // Selection state
     SelectionManager selectionManager_;
+
+    // Validation issue tracking
+    std::set<std::string> problematicEntityHandles_;  // Entities with validation issues
 
     // Box selection state
     BoxSelectMode boxSelectMode_;

@@ -121,6 +121,35 @@ target_include_directories(import PUBLIC
 )
 
 # ============================================================================
+# EXPORT LIBRARY (DXF WRITING)
+# ============================================================================
+
+set(EXPORT_HEADERS
+    include/export/DXFWriter.h
+    include/export/GeometryExporter.h
+)
+
+set(EXPORT_SOURCES
+    src/export/DXFWriter.cpp
+    src/export/GeometryExporter.cpp
+)
+
+add_library(export STATIC
+    ${EXPORT_HEADERS}
+    ${EXPORT_SOURCES}
+)
+
+target_link_libraries(export
+    Qt6::Core
+    geometry
+    import
+)
+
+target_include_directories(export PUBLIC
+    ${CMAKE_SOURCE_DIR}/include
+)
+
+# ============================================================================
 # MODEL LIBRARY (DOCUMENT MANAGEMENT)
 # ============================================================================
 
@@ -129,12 +158,14 @@ set(MODEL_HEADERS
     include/model/Command.h
     include/model/CommandHistory.h
     include/model/EntityCommands.h
+    include/model/ExportValidator.h
 )
 
 set(MODEL_SOURCES
     src/model/DocumentModel.cpp
     src/model/CommandHistory.cpp
     src/model/EntityCommands.cpp
+    src/model/ExportValidator.cpp
 )
 
 add_library(model STATIC
@@ -146,6 +177,7 @@ target_link_libraries(model
     Qt6::Core
     geometry
     import
+    export
 )
 
 target_include_directories(model PUBLIC
@@ -210,7 +242,8 @@ target_include_directories(ui PUBLIC
 set(APP_SOURCES
     src/main.cpp
 )
-
+# Console enabled for debugging (remove WIN32 flag)
+# Add WIN32 flag back for release builds if you don't want console window
 add_executable(OwnCAD
     ${APP_SOURCES}
 )
@@ -276,6 +309,8 @@ endfunction()
 add_model_test(test_CommandHistory tests/model/test_CommandHistory.cpp)
 add_model_test(test_EntityCommands tests/model/test_EntityCommands.cpp)
 add_model_test(test_UndoRedoStress tests/model/test_UndoRedoStress.cpp)
+add_model_test(test_MetadataPreservation tests/model/test_MetadataPreservation.cpp)
+add_model_test(test_DXFRoundTrip tests/model/test_DXFRoundTrip.cpp)
 
 
 # ============================================================================

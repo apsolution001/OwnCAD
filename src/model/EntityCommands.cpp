@@ -3,6 +3,7 @@
 #include "geometry/GeometryConstants.h"
 #include <QDebug>
 #include <cmath>
+#include <set>
 
 namespace OwnCAD {
 namespace Model {
@@ -227,13 +228,14 @@ bool DeleteEntityCommand::execute()
         return false;
     }
 
-    // Save entity for undo
+    // Save entity and index for undo
     const auto* entity = m_documentModel->findEntityByHandle(m_handle);
     if (!entity) {
         return false;
     }
 
     m_savedEntity = *entity;
+    m_originalIndex = m_documentModel->findEntityIndexByHandle(m_handle).value_or(0);
 
     // Remove entity
     bool success = m_documentModel->removeEntity(m_handle);
@@ -249,7 +251,7 @@ bool DeleteEntityCommand::undo()
         return false;
     }
 
-    bool success = m_documentModel->restoreEntity(*m_savedEntity);
+    bool success = m_documentModel->restoreEntityAtIndex(*m_savedEntity, m_originalIndex);
     if (success) {
         m_executed = false;
     }
@@ -306,13 +308,16 @@ bool DeleteEntitiesCommand::execute()
     }
 
     m_savedEntities.clear();
-    m_savedEntities.reserve(m_handles.size());
+    m_originalIndices.clear();
 
-    // First pass: save all entities
-    for (const auto& handle : m_handles) {
-        const auto* entity = m_documentModel->findEntityByHandle(handle);
-        if (entity) {
-            m_savedEntities.push_back(*entity);
+    // Find and save entities in THEIR DOCUMENT ORDER to ensure correct restoration
+    const auto& allEntities = m_documentModel->entities();
+    std::set<std::string> targetHandles(m_handles.begin(), m_handles.end());
+
+    for (size_t i = 0; i < allEntities.size(); ++i) {
+        if (targetHandles.count(allEntities[i].handle)) {
+            m_savedEntities.push_back(allEntities[i]);
+            m_originalIndices.push_back(i);
         }
     }
 
@@ -320,7 +325,7 @@ bool DeleteEntitiesCommand::execute()
         return false;
     }
 
-    // Second pass: remove all entities
+    // Remove all entities
     for (const auto& savedEntity : m_savedEntities) {
         m_documentModel->removeEntity(savedEntity.handle);
     }
@@ -335,13 +340,19 @@ bool DeleteEntitiesCommand::undo()
         return false;
     }
 
-    // Restore in reverse order (maintains insertion order behavior)
-    for (auto it = m_savedEntities.rbegin(); it != m_savedEntities.rend(); ++it) {
-        m_documentModel->restoreEntity(*it);
+    // Restore in ORIGINAL DOCUMENT ORDER (increasing index)
+    // Since we saved them in document order, we just iterate normally
+    bool allSuccess = true;
+    for (size_t i = 0; i < m_savedEntities.size(); ++i) {
+        if (!m_documentModel->restoreEntityAtIndex(m_savedEntities[i], m_originalIndices[i])) {
+            allSuccess = false;
+        }
     }
 
-    m_executed = false;
-    return true;
+    if (allSuccess) {
+        m_executed = false;
+    }
+    return allSuccess;
 }
 
 QString DeleteEntitiesCommand::description() const

@@ -7,8 +7,10 @@
 #include <QMenuBar>
 #include <QMenu>
 #include <QAction>
+#include <QActionGroup>
 #include <QKeySequence>
 #include <QStatusBar>
+#include <QToolBar>
 #include <QMessageBox>
 #include <QFileDialog>
 #include <QTextEdit>
@@ -26,6 +28,7 @@
 // Model headers
 #include "model/DocumentModel.h"
 #include "model/CommandHistory.h"
+#include "model/EntityCommands.h"
 
 // UI headers
 #include "ui/CADCanvas.h"
@@ -78,6 +81,9 @@ public:
         // Create menu bar
         createMenus();
 
+        // Create toolbar
+        createToolbar();
+
         // Create status bar with permanent widgets
         setupStatusBar();
 
@@ -112,6 +118,8 @@ private:
                 this, &MainWindow::onToolPromptChanged);
         connect(toolMgr, &ToolManager::geometryChanged,
                 this, &MainWindow::onGeometryChanged);
+        connect(toolMgr, &ToolManager::activeToolChanged,
+                this, &MainWindow::onActiveToolChanged);
         // Trigger validation when geometry changes via tools
         connect(toolMgr, &ToolManager::geometryChanged,
                 [this]() { document_->runValidationAsync(); });
@@ -247,6 +255,83 @@ private:
         // Help menu
         QMenu* helpMenu = menuBar()->addMenu("&Help");
         helpMenu->addAction("&About", this, &MainWindow::onAbout);
+    }
+
+    void createToolbar() {
+        // Create left vertical toolbar
+        toolToolbar_ = new QToolBar("Tools", this);
+        toolToolbar_->setOrientation(Qt::Vertical);
+        toolToolbar_->setMovable(false);  // Fixed position
+        toolToolbar_->setFloatable(false);
+        toolToolbar_->setIconSize(QSize(32, 32));
+        toolToolbar_->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+
+        addToolBar(Qt::LeftToolBarArea, toolToolbar_);
+
+        // Add actions to toolbar
+        createToolbarActions();
+    }
+
+    void createToolbarActions() {
+        // SELECTION GROUP
+        QAction* selectAction = toolToolbar_->addAction("Select");
+        selectAction->setToolTip("Select Tool (ESC)\nClick to select entities");
+        selectAction->setCheckable(true);
+        selectAction->setChecked(true);  // Default tool
+        connect(selectAction, &QAction::triggered, this, &MainWindow::onSelectTool);
+
+        toolToolbar_->addSeparator();
+
+        // DRAWING GROUP
+        QAction* lineAction = toolToolbar_->addAction("Line");
+        lineAction->setToolTip("Line Tool (L)\nClick two points to draw a line");
+        lineAction->setCheckable(true);
+        connect(lineAction, &QAction::triggered, this, &MainWindow::onLineTool);
+
+        QAction* arcAction = toolToolbar_->addAction("Arc");
+        arcAction->setToolTip("Arc Tool\nClick center, start, and end points");
+        arcAction->setCheckable(true);
+        connect(arcAction, &QAction::triggered, this, &MainWindow::onArcTool);
+
+        QAction* rectAction = toolToolbar_->addAction("Rectangle");
+        rectAction->setToolTip("Rectangle Tool\nClick two corners");
+        rectAction->setCheckable(true);
+        connect(rectAction, &QAction::triggered, this, &MainWindow::onRectangleTool);
+
+        toolToolbar_->addSeparator();
+
+        // TRANSFORMATION GROUP
+        QAction* moveAction = toolToolbar_->addAction("Move");
+        moveAction->setToolTip("Move Tool (V)\nSelect entities first, then click base and destination");
+        moveAction->setCheckable(true);
+        connect(moveAction, &QAction::triggered, this, &MainWindow::onMoveTool);
+
+        QAction* rotateAction = toolToolbar_->addAction("Rotate");
+        rotateAction->setToolTip("Rotate Tool (R)\nSelect entities first, then click center and angle");
+        rotateAction->setCheckable(true);
+        connect(rotateAction, &QAction::triggered, this, &MainWindow::onRotateTool);
+
+        QAction* mirrorAction = toolToolbar_->addAction("Mirror");
+        mirrorAction->setToolTip("Mirror Tool (I)\nSelect entities first, then define mirror axis");
+        mirrorAction->setCheckable(true);
+        connect(mirrorAction, &QAction::triggered, this, &MainWindow::onMirrorTool);
+
+        toolToolbar_->addSeparator();
+
+        // EDIT GROUP
+        QAction* deleteAction = toolToolbar_->addAction("Delete");
+        deleteAction->setToolTip("Delete Selected (Del)\nRemove selected entities");
+        connect(deleteAction, &QAction::triggered, this, &MainWindow::onDeleteTool);
+
+        // Create action group for mutual exclusivity (only one tool active at a time)
+        QActionGroup* toolActionGroup = new QActionGroup(this);
+        toolActionGroup->addAction(selectAction);
+        toolActionGroup->addAction(lineAction);
+        toolActionGroup->addAction(arcAction);
+        toolActionGroup->addAction(rectAction);
+        toolActionGroup->addAction(moveAction);
+        toolActionGroup->addAction(rotateAction);
+        toolActionGroup->addAction(mirrorAction);
     }
 
     void setupStatusBar() {
@@ -731,6 +816,54 @@ private slots:
         canvas_->setCursor(Qt::CrossCursor);
     }
 
+    void onDeleteTool() {
+        std::vector<std::string> selection = canvas_->selectedHandles();
+        if (selection.empty()) {
+            statusBar()->showMessage("DELETE: Select entities first", 3000);
+            return;
+        }
+
+        // Create and execute delete command
+        auto deleteCmd = std::make_unique<DeleteEntitiesCommand>(
+            document_.get(),
+            selection
+        );
+
+        commandHistory_->executeCommand(std::move(deleteCmd));
+
+        // Refresh canvas
+        canvas_->setEntities(document_->entities());
+        canvas_->clearSelection();
+
+        statusBar()->showMessage(
+            QString("Deleted %1 entities").arg(selection.size()),
+            2000
+        );
+    }
+
+    void onActiveToolChanged(const QString& toolId) {
+        // Update toolbar button states based on active tool
+        QList<QAction*> actions = toolToolbar_->actions();
+
+        if (toolId.isEmpty()) {
+            // No tool active → Select mode
+            for (QAction* action : actions) {
+                if (action->text() == "Select") {
+                    action->setChecked(true);
+                    break;
+                }
+            }
+        } else {
+            // Tool activated → find and check corresponding button
+            for (QAction* action : actions) {
+                if (action->text().toLower() == toolId.toLower()) {
+                    action->setChecked(true);
+                    break;
+                }
+            }
+        }
+    }
+
     void onToolPromptChanged(const QString& prompt) {
         toolPromptLabel_->setText(prompt);
     }
@@ -746,6 +879,7 @@ private:
 
     // UI elements
     CADCanvas* canvas_;
+    QToolBar* toolToolbar_;
 
     // Status bar widgets (permanent indicators)
     QLabel* cursorPosLabel_;
@@ -766,6 +900,23 @@ private:
     void updateValidationStatus() {
         const auto& result = document_->validationResult();
 
+        // Extract all problematic entity handles from validation result
+        std::set<std::string> problematicHandles;
+        for (const auto& issue : result.issues) {
+            // Add primary entity handle (if not empty)
+            if (!issue.entityHandle.empty()) {
+                problematicHandles.insert(issue.entityHandle);
+            }
+            // Add related entity handle (for duplicate/overlap issues)
+            if (!issue.relatedEntityHandle.empty()) {
+                problematicHandles.insert(issue.relatedEntityHandle);
+            }
+        }
+
+        // Update canvas highlighting
+        canvas_->setProblematicEntities(problematicHandles);
+
+        // Update status bar indicator
         if (result.passed()) {
             validationLabel_->setText("✓ Valid");
             validationLabel_->setStyleSheet("color: green; font-weight: bold;");
